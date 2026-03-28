@@ -190,9 +190,9 @@ export default function ManagerBlockedSlotsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-surface">
         <Navbar />
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-28">
           <p>Loading blocked slots...</p>
         </main>
       </div>
@@ -200,9 +200,9 @@ export default function ManagerBlockedSlotsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface">
       <Navbar />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-28">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Facility Management</h1>
           <Button onClick={handleCreateClick}>

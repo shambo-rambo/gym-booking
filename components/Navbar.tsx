@@ -1,128 +1,152 @@
 "use client"
 
-import { useSession, signOut } from "next-auth/react"
 import Link from "next/link"
-import { Menu } from "lucide-react"
-import { Button } from "./ui/button"
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "./ui/sheet"
+import { usePathname } from "next/navigation"
+import { useSession, signOut } from "next-auth/react"
+import { CalendarDays, BookOpen, Clock, User, Shield, LogOut } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { useState } from "react"
+
+const PAGE_TITLES: Record<string, string> = {
+  "/":                       "Reserve Your Space",
+  "/my-bookings":            "My Bookings",
+  "/queue":                  "Queue",
+  "/settings":               "Settings",
+  "/manager":                "Dashboard",
+  "/manager/users":          "Residents",
+  "/manager/bookings":       "All Bookings",
+  "/manager/blocked-slots":  "Blocked Slots",
+  "/manager/announcements":  "Announcements",
+}
 
 export default function Navbar() {
   const { data: session, status } = useSession()
+  const pathname = usePathname()
+  const [showSignOut, setShowSignOut] = useState(false)
 
-  if (status === "loading") {
-    return null
-  }
+  if (status === "loading") return null
+
+  const isManager = (session?.user as any)?.role === "MANAGER"
+  const pageTitle = PAGE_TITLES[pathname] ?? "The Residences"
+
+  const initials = session?.user?.name
+    ?.split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) ?? "?"
+
+  const navItems = [
+    { href: "/",           label: "Book",     icon: CalendarDays },
+    { href: "/my-bookings",label: "Bookings", icon: BookOpen },
+    { href: "/queue",      label: "Queue",    icon: Clock },
+    ...(isManager ? [{ href: "/manager", label: "Admin", icon: Shield }] : []),
+    { href: "/settings",   label: "Profile",  icon: User },
+  ]
 
   if (!session) {
     return (
-      <nav className="border-b bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <Link href="/" className="text-xl font-bold">
-              Gym & Sauna Booking
-            </Link>
-            <div className="space-x-4">
-              <Link href="/login">
-                <Button variant="ghost">Sign In</Button>
-              </Link>
-              <Link href="/register">
-                <Button>Register</Button>
-              </Link>
-            </div>
-          </div>
+      <header className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-outline-variant/30 px-6 flex items-center justify-between shadow-bottom"
+        style={{ height: "64px" }}>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-secondary">
+            The Residences
+          </p>
+          <h1 className="text-base font-bold tracking-tight text-primary leading-tight">
+            Amenity Booking
+          </h1>
         </div>
-      </nav>
+        <div className="flex items-center gap-3">
+          <Link href="/login"
+            className="text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors">
+            Sign In
+          </Link>
+          <Link href="/register"
+            className="text-sm font-bold bg-primary text-on-primary px-4 py-2 rounded-md hover:bg-primary/90 transition-colors">
+            Register
+          </Link>
+        </div>
+      </header>
     )
   }
 
-  const isManager = (session.user as any)?.role === "MANAGER"
-
   return (
-    <nav className="border-b bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Mobile Layout */}
-        <div className="md:hidden flex items-center justify-between h-16">
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-11 w-11">
-                <Menu className="h-6 w-6" />
-                <span className="sr-only">Open menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left">
-              <SheetHeader>
-                <SheetTitle className="text-left">{session.user?.name}</SheetTitle>
-              </SheetHeader>
-              <nav className="flex flex-col space-y-4 mt-8">
-                <Link href="/" className="text-lg p-3 rounded-lg hover:bg-accent transition-colors">
-                  Calendar
-                </Link>
-                <Link href="/my-bookings" className="text-lg p-3 rounded-lg hover:bg-accent transition-colors">
-                  My Bookings
-                </Link>
-                <Link href="/queue" className="text-lg p-3 rounded-lg hover:bg-accent transition-colors">
-                  Queue
-                </Link>
-                {isManager && (
-                  <Link href="/manager" className="text-lg p-3 rounded-lg hover:bg-accent transition-colors">
-                    Manager
-                  </Link>
-                )}
-                <Link href="/settings" className="text-lg p-3 rounded-lg hover:bg-accent transition-colors">
-                  Settings
-                </Link>
-                <Button variant="outline" onClick={() => signOut()} className="mt-4 justify-start">
+    <>
+      {/* Glass Top Bar */}
+      <header
+        className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-xl border-b border-outline-variant/20 px-5 sm:px-6 flex items-center justify-between shadow-bottom"
+        style={{ height: "64px" }}
+      >
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-secondary leading-none mb-0.5">
+            The Residences
+          </p>
+          <h1 className="text-base font-bold tracking-tight text-primary leading-tight">
+            {pageTitle}
+          </h1>
+        </div>
+
+        <div className="relative">
+          <button
+            onClick={() => setShowSignOut((v) => !v)}
+            className="w-9 h-9 bg-primary rounded-full flex items-center justify-center text-on-primary text-xs font-bold hover:bg-primary/90 transition-colors active:scale-95"
+          >
+            {initials}
+          </button>
+
+          {showSignOut && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowSignOut(false)} />
+              <div className="absolute right-0 top-11 z-50 bg-white rounded-xl shadow-card-lg border border-outline-variant/30 overflow-hidden min-w-[160px]">
+                <div className="px-4 py-3 border-b border-outline-variant/20">
+                  <p className="text-xs font-bold text-primary truncate">{session.user?.name}</p>
+                  <p className="text-[11px] text-on-surface-variant truncate">{session.user?.email}</p>
+                </div>
+                <button
+                  onClick={() => { setShowSignOut(false); signOut() }}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-destructive hover:bg-surface-container-low transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
                   Sign Out
-                </Button>
-              </nav>
-            </SheetContent>
-          </Sheet>
-
-          <Link href="/" className="text-lg font-bold">
-            Gym Booking
-          </Link>
-
-          <div className="w-11" /> {/* Spacer for balance */}
+                </button>
+              </div>
+            </>
+          )}
         </div>
+      </header>
 
-        {/* Desktop Layout */}
-        <div className="hidden md:flex justify-between h-16 items-center">
-          <Link href="/" className="text-xl font-bold">
-            Gym & Sauna Booking
-          </Link>
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">
-              {session.user?.name}
-            </span>
-            <Link href="/">
-              <Button variant="ghost">Calendar</Button>
-            </Link>
-            <Link href="/my-bookings">
-              <Button variant="ghost">My Bookings</Button>
-            </Link>
-            <Link href="/queue">
-              <Button variant="ghost">Queue</Button>
-            </Link>
-            {isManager && (
-              <Link href="/manager">
-                <Button variant="ghost">Manager</Button>
+      {/* Glass Bottom Nav */}
+      <nav
+        className="fixed bottom-0 left-0 w-full z-50 bg-white/85 backdrop-blur-xl border-t border-outline-variant/20 shadow-top"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="flex justify-around items-center px-2 py-2 max-w-lg mx-auto">
+          {navItems.map(({ href, label, icon: Icon }) => {
+            const isActive =
+              href === "/" ? pathname === "/" : pathname.startsWith(href)
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex flex-col items-center gap-1 px-3 sm:px-4 py-2 rounded-xl transition-all active:scale-90",
+                  isActive
+                    ? "text-secondary"
+                    : "text-outline hover:text-on-surface-variant"
+                )}
+              >
+                <Icon
+                  className={cn(
+                    "w-5 h-5 transition-all",
+                    isActive ? "stroke-[2.5px]" : "stroke-[1.5px]"
+                  )}
+                />
+                <span className="text-[10px] uppercase tracking-wider font-bold">{label}</span>
               </Link>
-            )}
-            <Link href="/settings">
-              <Button variant="ghost">Settings</Button>
-            </Link>
-            <Button variant="outline" onClick={() => signOut()}>
-              Sign Out
-            </Button>
-          </div>
+            )
+          })}
         </div>
-      </div>
-    </nav>
+      </nav>
+    </>
   )
 }

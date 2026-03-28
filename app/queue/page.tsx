@@ -218,9 +218,9 @@ export default function QueuePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-surface">
       <Navbar />
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-20 pb-28">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold">Queue</h1>
           <Button variant="outline" size="sm" onClick={fetchQueues}>

@@ -1,0 +1,42 @@
+{
+  "name": "Gym & Sauna Booking",
+  "short_name": "Gym Booking",
+  "description": "Book gym and sauna facilities for your apartment building",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f9fafb",
+  "theme_color": "#4F46E5",
+  "categories": ["lifestyle", "utilities"],
+  "icons": [
+    {
+      "src": "/api/icons/192",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/api/icons/512",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "My Bookings",
+      "short_name": "Bookings",
+      "description": "View your upcoming bookings",
+      "url": "/my-bookings",
+      "icons": [{ "src": "/api/icons/192", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Queue",
+      "short_name": "Queue",
+      "description": "View your queue positions",
+      "url": "/queue",
+      "icons": [{ "src": "/api/icons/192", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

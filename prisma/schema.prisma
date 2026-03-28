@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                     String   @id @default(cuid())
+  email                  String   @unique
+  name                   String
+  password               String
+  phoneNumber            String?
+  apartmentNumber        Int
+  role                   Role     @default(RESIDENT)
+  status                 Status   @default(PENDING)
+  notificationPreference NotificationPreference @default(EMAIL_ONLY)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  bookings               Booking[]
+  queueEntries           QueueEntry[]
+  blockedSlotsCreated    BlockedSlot[]
+  announcementsCreated   Announcement[]
+
+  @@index([apartmentNumber])
+  @@index([status])
+}
+
+enum Role {
+  RESIDENT
+  MANAGER
+}
+
+enum Status {
+  PENDING
+  VERIFIED
+  DEACTIVATED
+}
+
+enum NotificationPreference {
+  EMAIL_ONLY
+  SMS_ONLY
+  BOTH
+}
+
+model Booking {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  facilityType  FacilityType
+  equipmentType EquipmentType?
+  bookingType   BookingType
+
+  date          DateTime @db.Date
+  startTime     String
+  duration      Int
+
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+  @@index([facilityType, date, startTime])
+  @@index([date, startTime])
+}
+
+enum FacilityType {
+  GYM
+  SAUNA
+}
+
+enum EquipmentType {
+  WEIGHTS_MACHINE
+  FREE_DUMBBELLS
+  TREADMILL
+  ROWING_MACHINE
+  EXERCISE_BIKE
+}
+
+enum BookingType {
+  EXCLUSIVE
+  SHARED
+}
+
+model QueueEntry {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  facilityType  FacilityType
+  equipmentType EquipmentType?
+  bookingType   BookingType
+  date          DateTime @db.Date
+  startTime     String
+  duration      Int
+
+  position      Int
+  notifiedAt    DateTime?
+  expiresAt     DateTime?
+
+  createdAt     DateTime @default(now())
+
+  @@index([facilityType, date, startTime])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model BlockedSlot {
+  id          String   @id @default(cuid())
+  facilityType FacilityType
+  date        DateTime @db.Date
+  startTime   String
+  duration    Int
+  reason      String
+  recurring   Boolean  @default(false)
+  createdBy   String
+  creator     User     @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime @default(now())
+
+  @@index([facilityType, date])
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  title     String
+  message   String   @db.Text
+  createdBy String
+  creator   User     @relation(fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+  expiresAt DateTime?
+
+  @@index([expiresAt])
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  type      NotificationType
+  channel   NotificationChannel
+  content   String   @db.Text
+  sentAt    DateTime @default(now())
+  success   Boolean
+  error     String?
+  cost      Float?
+
+  @@index([userId])
+  @@index([sentAt])
+  @@index([type])
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMATION
+  BOOKING_REMINDER
+  QUEUE_SLOT_AVAILABLE
+  QUEUE_POSITION_UPDATE
+  ACCOUNT_VERIFIED
+  BOOKING_CANCELLED_BY_ADMIN
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+}

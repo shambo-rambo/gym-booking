@@ -38,7 +38,7 @@ env:
       - RUNTIME
 
   - variable: NEXT_PUBLIC_APP_URL
-    value: "https://watertower-gym.web.app"
+    value: "https://watertower-gym--gym-booking.asia-southeast1.hosted.app"
     availability:
       - BUILD
       - RUNTIME

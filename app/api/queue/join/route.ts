@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { z } from "zod"
-import { isSlotAvailable, canBookExclusiveSlot, canBookSharedSlot } from "@/lib/booking-rules"
+import { isSlotAvailable, checkConsecutiveDays, checkDailyLimit, checkSessionLimit } from "@/lib/booking-rules"
 import { parseLocalDate } from "@/lib/date-utils"
 
 const joinQueueSchema = z.object({
@@ -82,25 +82,13 @@ export async function POST(request: NextRequest) {
       duration
     )
 
-    // Check anti-hoarding rules for this user
-    let antiHoardingCheck
-    if (bookingType === BookingType.EXCLUSIVE) {
-      antiHoardingCheck = await canBookExclusiveSlot(
-        userId,
-        facilityType as FacilityType,
-        date,
-        startTime,
-        duration
-      )
-    } else {
-      antiHoardingCheck = await canBookSharedSlot(
-        userId,
-        facilityType as FacilityType,
-        equipmentType as EquipmentType || null,
-        date,
-        startTime
-      )
-    }
+    // Check booking rules for this user
+    const sessionCheck = await checkSessionLimit(userId, facilityType as FacilityType)
+    const dailyCheck = await checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration)
+    const consecutiveCheck = await checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime)
+    const antiHoardingCheck = sessionCheck.allowed && dailyCheck.allowed && consecutiveCheck.allowed
+      ? { allowed: true }
+      : { allowed: false, reason: sessionCheck.reason ?? dailyCheck.reason ?? consecutiveCheck.reason }
 
     // Only prevent queue join if BOTH slot is available AND user passes anti-hoarding
     // If slot is full OR user is blocked by anti-hoarding, allow queue join
@@ -172,27 +160,10 @@ export async function POST(request: NextRequest) {
       let lastCanBookPosition = 0
 
       for (const entry of allQueueEntries) {
-        // Check if this queue entry user can book
-        let entryCanBook
-        if (bookingType === BookingType.EXCLUSIVE) {
-          entryCanBook = await canBookExclusiveSlot(
-            entry.userId,
-            facilityType as FacilityType,
-            date,
-            startTime,
-            duration
-          )
-        } else {
-          entryCanBook = await canBookSharedSlot(
-            entry.userId,
-            facilityType as FacilityType,
-            equipmentType as EquipmentType || null,
-            date,
-            startTime
-          )
-        }
-
-        if (entryCanBook.allowed) {
+        const entrySession = await checkSessionLimit(entry.userId, facilityType as FacilityType)
+        const entryDaily = await checkDailyLimit(entry.userId, facilityType as FacilityType, date, startTime, duration)
+        const entryConsecutive = await checkConsecutiveDays(entry.userId, facilityType as FacilityType, date, startTime)
+        if (entrySession.allowed && entryDaily.allowed && entryConsecutive.allowed) {
           lastCanBookPosition = entry.position
         }
       }

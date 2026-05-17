@@ -28,6 +28,11 @@ export default function SettingsPage() {
 
   const [notificationPreference, setNotificationPreference] = useState("EMAIL_ONLY")
   const [phoneNumber, setPhoneNumber] = useState("")
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [savingProfile, setSavingProfile] = useState(false)
+  const [profileError, setProfileError] = useState("")
+  const [profileSuccess, setProfileSuccess] = useState("")
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -43,11 +48,38 @@ export default function SettingsPage() {
         setSettings(data)
         setNotificationPreference(data.notificationPreference)
         setPhoneNumber(data.phoneNumber || "")
+        setName(data.name || "")
+        setEmail(data.email || "")
       }
     } catch (error) {
       console.error("Failed to fetch settings:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSaveProfile = async () => {
+    setProfileError("")
+    setProfileSuccess("")
+    setSavingProfile(true)
+    try {
+      const response = await fetch("/api/user/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email })
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setProfileError(data.error || "Failed to update profile")
+        return
+      }
+      setSettings(data.user)
+      setProfileSuccess("Profile updated successfully!")
+      setTimeout(() => setProfileSuccess(""), 3000)
+    } catch {
+      setProfileError("An error occurred. Please try again.")
+    } finally {
+      setSavingProfile(false)
     }
   }
 
@@ -108,21 +140,46 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Account Information</CardTitle>
-              <CardDescription>Your account details</CardDescription>
+              <CardDescription>Update your name and email address</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label>Name</Label>
-                <p className="text-sm text-gray-600 mt-1">{settings?.name}</p>
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                />
               </div>
-              <div>
-                <Label>Email</Label>
-                <p className="text-sm text-gray-600 mt-1">{settings?.email}</p>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                />
               </div>
-              <div>
+              <div className="space-y-1">
                 <Label>Apartment Number</Label>
-                <p className="text-sm text-gray-600 mt-1">#{settings?.apartmentNumber}</p>
+                <p className="text-sm text-gray-600">#{settings?.apartmentNumber}</p>
+                <p className="text-xs text-gray-400">To change your apartment number, contact the building manager.</p>
               </div>
+              {profileError && (
+                <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+                  {profileError}
+                </div>
+              )}
+              {profileSuccess && (
+                <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-700">
+                  {profileSuccess}
+                </div>
+              )}
+              <Button onClick={handleSaveProfile} disabled={savingProfile} className="w-full">
+                {savingProfile ? "Saving..." : "Save Profile"}
+              </Button>
             </CardContent>
           </Card>
 
@@ -131,59 +188,9 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
               <CardDescription>
-                Choose how you'd like to receive booking notifications
+                All notifications are currently sent by email only. SMS notifications coming soon.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="notificationPreference">Notification Method</Label>
-                <select
-                  id="notificationPreference"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={notificationPreference}
-                  onChange={(e) => setNotificationPreference(e.target.value)}
-                >
-                  <option value="EMAIL_ONLY">Email Only</option>
-                  <option value="SMS_ONLY">SMS Only</option>
-                  <option value="BOTH">Both Email and SMS</option>
-                </select>
-                <p className="text-xs text-gray-500">
-                  SMS is great for urgent queue notifications
-                </p>
-              </div>
-
-              {(notificationPreference === "SMS_ONLY" || notificationPreference === "BOTH") && (
-                <div className="space-y-2">
-                  <Label htmlFor="phoneNumber">Phone Number</Label>
-                  <Input
-                    id="phoneNumber"
-                    type="tel"
-                    placeholder="+61..."
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                  />
-                  <p className="text-xs text-gray-500">
-                    Australian mobile format: +61XXXXXXXXX
-                  </p>
-                </div>
-              )}
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
-                  {error}
-                </div>
-              )}
-
-              {success && (
-                <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-700">
-                  {success}
-                </div>
-              )}
-
-              <Button onClick={handleSave} disabled={saving} className="w-full">
-                {saving ? "Saving..." : "Save Changes"}
-              </Button>
-            </CardContent>
           </Card>
 
           {/* Notification Info */}

@@ -18,6 +18,9 @@ export const metadata: Metadata = {
     statusBarStyle: "default",
     title: "Gym Booking",
   },
+  other: {
+    "mobile-web-app-capable": "yes",
+  },
 }
 
 export const viewport: Viewport = {

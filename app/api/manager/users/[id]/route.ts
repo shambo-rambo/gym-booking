@@ -8,6 +8,13 @@ const updateUserSchema = z.object({
   status: z.enum(["VERIFIED", "DEACTIVATED"])
 })
 
+const editUserSchema = z.object({
+  name: z.string().min(1).max(100),
+  email: z.string().email(),
+  apartmentNumber: z.number().int().min(1).max(9999),
+  phoneNumber: z.string().nullable().optional(),
+})
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -81,5 +88,53 @@ export async function PATCH(
       { error: "Failed to update user" },
       { status: 500 }
     )
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const manager = await prisma.user.findUnique({
+      where: { id: (session.user as any).id }
+    })
+    if (!manager || manager.role !== "MANAGER") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const data = editUserSchema.parse(body)
+
+    const conflict = await prisma.user.findFirst({
+      where: { email: data.email, NOT: { id: params.id } }
+    })
+    if (conflict) {
+      return NextResponse.json({ error: "Email already in use" }, { status: 409 })
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: params.id },
+      data: {
+        name: data.name,
+        email: data.email,
+        apartmentNumber: data.apartmentNumber,
+        phoneNumber: data.phoneNumber ?? null,
+      }
+    })
+
+    return NextResponse.json({ success: true, user: updatedUser })
+
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
+    }
+    console.error("Edit user error:", error)
+    return NextResponse.json({ error: "Failed to update user" }, { status: 500 })
   }
 }

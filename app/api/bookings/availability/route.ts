@@ -4,24 +4,19 @@ import { prisma } from "@/lib/prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import {
   generateTimeSlots,
-  canBookExclusiveSlot,
-  canBookSharedSlot,
-  parseSlotDateTime
+  getWeekStart,
+  getWeekEnd,
 } from "@/lib/booking-rules"
 import { parseLocalDate } from "@/lib/date-utils"
 
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
-
     if (!session?.user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const searchParams = request.nextUrl.searchParams
+    const { searchParams } = request.nextUrl
     const facilityType = searchParams.get("facilityType") as FacilityType
     const dateStr = searchParams.get("date")
 
@@ -35,292 +30,232 @@ export async function GET(request: NextRequest) {
     const date = parseLocalDate(dateStr)
     const userId = (session.user as any).id
 
-    // Check if this date is more than 7 days in advance
     const now = new Date()
     const today = new Date(now)
     today.setHours(0, 0, 0, 0)
-
     const slotDate = new Date(date)
     slotDate.setHours(0, 0, 0, 0)
-
-    const daysDifference = Math.floor((slotDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    const daysDifference = Math.floor(
+      (slotDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    )
     const isBeyond7Days = daysDifference > 7
 
+    const yesterday = new Date(date.getTime() - 24 * 60 * 60 * 1000)
+
+    // Fetch all required data in a single parallel round-trip
+    const [
+      existingBookings,
+      blockedSlots,
+      queueEntries,
+      yesterdayUserBookings,  // for consecutive-day check
+      userDateBookings,        // for daily 1-hour limit check
+      upcomingUserBookings,    // for session limit check (max 3)
+    ] = await Promise.all([
+      prisma.booking.findMany({ where: { facilityType, date } }),
+      prisma.blockedSlot.findMany({ where: { facilityType, date } }),
+      prisma.queueEntry.findMany({ where: { facilityType, date } }),
+      prisma.booking.findMany({ where: { userId, facilityType, date: yesterday } }),
+      prisma.booking.findMany({ where: { userId, facilityType, date } }),
+      prisma.booking.findMany({
+        where: { userId, facilityType, date: { gte: today } },
+        select: { date: true, startTime: true },
+      }),
+    ])
+
+    // Distinct upcoming sessions (date+startTime pairs)
+    const upcomingSessionKeys = new Set(
+      upcomingUserBookings.map((b) => `${b.date.toISOString()}|${b.startTime}`)
+    )
+    const upcomingSessionCount = upcomingSessionKeys.size
+
+    // Consecutive-day check: did this user book the same start time yesterday?
+    function isConsecutiveDayConflict(startTime: string): boolean {
+      return yesterdayUserBookings.some((b) => b.startTime === startTime)
+    }
+
+    // Daily limit check: would adding this slot push the user over 60 min today?
+    function exceedsDailyLimit(startTime: string, duration: number): boolean {
+      const toMin = (t: string) => { const [h, m] = t.split(":").map(Number); return h * 60 + m }
+      const intervals: [number, number][] = [
+        ...userDateBookings.map((b) => [toMin(b.startTime), toMin(b.startTime) + b.duration] as [number, number]),
+        [toMin(startTime), toMin(startTime) + duration],
+      ]
+      intervals.sort((a, b) => a[0] - b[0])
+      let total = 0
+      let [cs, ce] = intervals[0]
+      for (let i = 1; i < intervals.length; i++) {
+        const [s, e] = intervals[i]
+        if (s < ce) ce = Math.max(ce, e)
+        else { total += ce - cs; cs = s; ce = e }
+      }
+      total += ce - cs
+      return total > 60
+    }
+
+    // Session limit check: is the user at their 3-session cap for a new slot?
+    function exceedsSessionLimit(startTime: string): boolean {
+      if (upcomingSessionCount < 3) return false
+      // If this date+time is already one of their sessions, it doesn't count as new
+      const key = `${date.toISOString()}|${startTime}`
+      return !upcomingSessionKeys.has(key)
+    }
+
     const timeSlots = generateTimeSlots()
+    const durations = [30, 60] as const
 
-    // Get all bookings for this facility on this date
-    const existingBookings = await prisma.booking.findMany({
-      where: {
-        facilityType,
-        date
-      }
-    })
+    const slots = timeSlots.map((startTime) => {
+      const durationAvailability = durations.map((duration) => {
+        const isBlocked = blockedSlots.some(
+          (b) => b.startTime === startTime && b.duration === duration
+        )
 
-    // Get all blocked slots for this facility on this date
-    const blockedSlots = await prisma.blockedSlot.findMany({
-      where: {
-        facilityType,
-        date
-      }
-    })
+        const [slotHour, slotMinute] = startTime.split(":").map(Number)
+        const slotStartMinutes = slotHour * 60 + slotMinute
+        const slotEndMinutes = slotStartMinutes + duration
 
-    // Get queue counts
-    const queueEntries = await prisma.queueEntry.findMany({
-      where: {
-        facilityType,
-        date
-      }
-    })
+        const slotBookings = existingBookings.filter((b) => {
+          const [bh, bm] = b.startTime.split(":").map(Number)
+          const bookingStart = bh * 60 + bm
+          return bookingStart < slotEndMinutes && bookingStart + b.duration > slotStartMinutes
+        })
 
-    // Process each time slot
-    const slots = await Promise.all(
-      timeSlots.map(async (startTime) => {
-        // Check both 30 and 60 minute durations
-        const durations = [30, 60]
+        const userBookingStartsHere = existingBookings.find(
+          (b) => b.userId === userId && b.startTime === startTime && b.duration === duration
+        ) ?? null
 
-        const durationAvailability = await Promise.all(
-          durations.map(async (duration) => {
-            // Check if blocked
-            const isBlocked = blockedSlots.some(
-              b => b.startTime === startTime && b.duration === duration
-            )
+        const userBookingExtendsHere =
+          userBookingStartsHere === null
+            ? existingBookings.find((b) => {
+                if (b.userId !== userId) return false
+                const [bh, bm] = b.startTime.split(":").map(Number)
+                const bookingStart = bh * 60 + bm
+                return bookingStart < slotStartMinutes && bookingStart + b.duration > slotStartMinutes
+              }) ?? null
+            : null
 
-            // Parse slot start time for overlap calculation
-            const [slotHour, slotMinute] = startTime.split(':').map(Number)
-            const slotStartMinutes = slotHour * 60 + slotMinute
-            const slotEndMinutes = slotStartMinutes + duration
+        const userBooking = userBookingStartsHere ?? userBookingExtendsHere
 
-            // Get bookings that overlap with this time slot
-            // A booking overlaps if: booking_start < slot_end AND booking_end > slot_start
-            const slotBookings = existingBookings.filter(b => {
-              const [bookingHour, bookingMinute] = b.startTime.split(':').map(Number)
-              const bookingStartMinutes = bookingHour * 60 + bookingMinute
-              const bookingEndMinutes = bookingStartMinutes + b.duration
+        const queueCount = queueEntries.filter((q) => {
+          if (q.startTime === startTime) return true
+          if (duration === 30) {
+            const [qh, qm] = q.startTime.split(":").map(Number)
+            const queueStart = qh * 60 + qm
+            return queueStart < slotStartMinutes && queueStart + q.duration > slotStartMinutes
+          }
+          return false
+        }).length
 
-              // Check for overlap
-              return bookingStartMinutes < slotEndMinutes && bookingEndMinutes > slotStartMinutes
-            })
+        const userQueueEntryStartsHere = queueEntries.find(
+          (q) => q.userId === userId && q.startTime === startTime && q.duration === duration
+        ) ?? null
 
-            // Check if user has a booking here
-            // Two cases:
-            // 1. User's booking starts at this exact time and duration
-            // 2. User's booking started earlier but extends into this slot (for visual continuity)
-            const userBookingStartsHere = existingBookings.find(
-              b => b.userId === userId && b.startTime === startTime && b.duration === duration
-            )
+        const userQueueEntryExtendsHere =
+          userQueueEntryStartsHere === null
+            ? queueEntries.find((q) => {
+                if (q.userId !== userId) return false
+                const [qh, qm] = q.startTime.split(":").map(Number)
+                const queueStart = qh * 60 + qm
+                return queueStart < slotStartMinutes && queueStart + q.duration > slotStartMinutes
+              }) ?? null
+            : null
 
-            // Check if user's booking from an earlier slot extends into this one
-            const userBookingExtendsHere = !userBookingStartsHere && existingBookings.find(b => {
-              if (b.userId !== userId) return false
+        const userQueueEntry = userQueueEntryStartsHere ?? userQueueEntryExtendsHere
 
-              const [bookingHour, bookingMinute] = b.startTime.split(':').map(Number)
-              const bookingStartMinutes = bookingHour * 60 + bookingMinute
-              const bookingEndMinutes = bookingStartMinutes + b.duration
+        const hasExclusiveBooking = slotBookings.some(
+          (b) => b.bookingType === BookingType.EXCLUSIVE
+        )
 
-              // User's booking extends into this slot if:
-              // - It started before this slot starts
-              // - It ends after this slot starts (i.e., overlaps)
-              return bookingStartMinutes < slotStartMinutes && bookingEndMinutes > slotStartMinutes
-            })
+        // Shared anti-hoarding: applies to all slot types for this user
+        const antiHoardingBlocked =
+          !userBooking && (
+            isConsecutiveDayConflict(startTime) ||
+            exceedsDailyLimit(startTime, duration) ||
+            exceedsSessionLimit(startTime)
+          )
 
-            const userBooking = userBookingStartsHere || userBookingExtendsHere
+        let exclusiveStatus = "available"
+        let exclusiveReason = ""
 
-            // Count queue entries that should display on this slot
-            const queueCount = queueEntries.filter(q => {
-              // Only show queue entries that START at this time
-              // A 60-min entry at 6:00 shows on both 6:00 slots (30-min and 60-min)
-              // and on 6:30 30-min slot (the second half)
-              if (q.startTime === startTime) {
-                return true
-              }
+        if (isBeyond7Days) {
+          exclusiveStatus = "blocked"
+          exclusiveReason = "Cannot book more than 7 days in advance."
+        } else if (isBlocked) {
+          exclusiveStatus = "blocked"
+          exclusiveReason =
+            blockedSlots.find((b) => b.startTime === startTime && b.duration === duration)?.reason ?? ""
+        } else if (slotBookings.length > 0) {
+          exclusiveStatus = "booked"
+        } else if (antiHoardingBlocked) {
+          exclusiveStatus = "unavailable"
+          exclusiveReason = "Booking limit reached."
+        }
 
-              // For 30-min slots, also show if a longer queue entry started earlier and extends here
-              if (duration === 30) {
-                const [qHour, qMinute] = q.startTime.split(':').map(Number)
-                const queueStartMinutes = qHour * 60 + qMinute
-                const queueEndMinutes = queueStartMinutes + q.duration
+        const sharedAvailability: Record<string, string> = {}
 
-                // Queue entry extends into this slot if it started before and ends after slot starts
-                return queueStartMinutes < slotStartMinutes && queueEndMinutes > slotStartMinutes
-              }
-
-              return false
-            }).length
-
-            // Check if user has a queue entry here
-            // Two cases:
-            // 1. User's queue entry starts at this exact time and duration
-            // 2. User's queue entry started earlier but extends into this slot (for visual continuity)
-            const userQueueEntryStartsHere = queueEntries.find(
-              q => q.userId === userId && q.startTime === startTime && q.duration === duration
-            )
-
-            // Check if user's queue entry from an earlier slot extends into this one
-            const userQueueEntryExtendsHere = !userQueueEntryStartsHere && queueEntries.find(q => {
-              if (q.userId !== userId) return false
-
-              const [queueHour, queueMinute] = q.startTime.split(':').map(Number)
-              const queueStartMinutes = queueHour * 60 + queueMinute
-              const queueEndMinutes = queueStartMinutes + q.duration
-
-              // User's queue entry extends into this slot if:
-              // - It started before this slot starts
-              // - It ends after this slot starts (i.e., overlaps)
-              return queueStartMinutes < slotStartMinutes && queueEndMinutes > slotStartMinutes
-            })
-
-            const userQueueEntry = userQueueEntryStartsHere || userQueueEntryExtendsHere
-
-            // Check if there's an exclusive booking (blocks everything)
-            const hasExclusiveBooking = slotBookings.some(
-              b => b.bookingType === BookingType.EXCLUSIVE
-            )
-
-            // Check exclusive availability
-            let exclusiveAvailable = "available"
-            let exclusiveReason = ""
-
-            if (isBeyond7Days) {
-              exclusiveAvailable = "blocked"
-              exclusiveReason = "Cannot book more than 7 days in advance."
-            } else if (isBlocked) {
-              exclusiveAvailable = "blocked"
-              const blocked = blockedSlots.find(
-                b => b.startTime === startTime && b.duration === duration
-              )
-              exclusiveReason = blocked?.reason || "Blocked"
-            } else if (slotBookings.length > 0) {
-              exclusiveAvailable = "booked"
+        if (facilityType === FacilityType.GYM) {
+          for (const equipment of [
+            EquipmentType.WEIGHTS_MACHINE,
+            EquipmentType.FREE_DUMBBELLS,
+            EquipmentType.TREADMILL,
+            EquipmentType.ROWING_MACHINE,
+            EquipmentType.EXERCISE_BIKE,
+          ]) {
+            if (isBeyond7Days || isBlocked) {
+              sharedAvailability[equipment] = "blocked"
+            } else if (hasExclusiveBooking) {
+              sharedAvailability[equipment] = "booked"
+            } else if (slotBookings.some((b) => b.equipmentType === equipment)) {
+              sharedAvailability[equipment] = "booked"
+            } else if (antiHoardingBlocked) {
+              sharedAvailability[equipment] = "unavailable"
             } else {
-              // Check anti-hoarding rules for user
-              const canBook = await canBookExclusiveSlot(
-                userId,
-                facilityType,
-                date,
-                startTime,
-                duration
-              )
-              if (!canBook.allowed) {
-                exclusiveAvailable = "unavailable"
-                exclusiveReason = canBook.reason || ""
-              }
+              sharedAvailability[equipment] = "available"
             }
+          }
+        } else {
+          if (isBeyond7Days || isBlocked) {
+            sharedAvailability.capacity = "blocked"
+          } else if (hasExclusiveBooking || slotBookings.length >= 2) {
+            sharedAvailability.capacity = slotBookings.length >= 2 ? "full" : "booked"
+          } else if (antiHoardingBlocked) {
+            sharedAvailability.capacity = "unavailable"
+          } else {
+            sharedAvailability.capacity = "available"
+          }
+        }
 
-            // Check shared availability (for gym equipment and sauna)
-            let sharedAvailability: any = {}
-
-            if (facilityType === FacilityType.GYM) {
-              // Check each equipment
-              const equipmentTypes = [
-                EquipmentType.WEIGHTS_MACHINE,
-                EquipmentType.FREE_DUMBBELLS,
-                EquipmentType.TREADMILL,
-                EquipmentType.ROWING_MACHINE,
-                EquipmentType.EXERCISE_BIKE
-              ]
-
-              for (const equipment of equipmentTypes) {
-                const equipmentBooked = slotBookings.some(
-                  b => b.equipmentType === equipment
-                )
-
-                if (isBeyond7Days) {
-                  sharedAvailability[equipment] = "blocked"
-                } else if (isBlocked) {
-                  sharedAvailability[equipment] = "blocked"
-                } else if (hasExclusiveBooking) {
-                  // If someone booked exclusive, no one else can book
-                  sharedAvailability[equipment] = "booked"
-                } else if (equipmentBooked) {
-                  sharedAvailability[equipment] = "booked"
-                } else if (slotBookings.length >= 2) {
-                  // Gym is full (2 people max)
-                  sharedAvailability[equipment] = "full"
-                } else {
-                  // Check anti-hoarding for shared
-                  const canBook = await canBookSharedSlot(
-                    userId,
-                    facilityType,
-                    equipment,
-                    date,
-                    startTime
-                  )
-                  sharedAvailability[equipment] = canBook.allowed
-                    ? "available"
-                    : "unavailable"
-                }
-              }
-            } else if (facilityType === FacilityType.SAUNA) {
-              // Shared sauna availability
-              if (isBeyond7Days) {
-                sharedAvailability.capacity = "blocked"
-              } else if (isBlocked) {
-                sharedAvailability.capacity = "blocked"
-              } else if (hasExclusiveBooking) {
-                // If someone booked exclusive, no one else can book
-                sharedAvailability.capacity = "booked"
-              } else if (slotBookings.length >= 2) {
-                sharedAvailability.capacity = "full"
-              } else {
-                const canBook = await canBookSharedSlot(
-                  userId,
-                  facilityType,
-                  null,
-                  date,
-                  startTime
-                )
-                sharedAvailability.capacity = canBook.allowed
-                  ? "available"
-                  : "unavailable"
-              }
-            }
-
-            // For display: only count bookings that START at this exact time
-            // Don't count bookings that just overlap from earlier times
-            const bookingsStartingHere = existingBookings.filter(
-              b => b.startTime === startTime && b.duration === duration
-            )
-
-            return {
-              duration,
-              exclusive: {
-                status: exclusiveAvailable,
-                reason: exclusiveReason
-              },
-              shared: sharedAvailability,
-              userBooking: userBooking
-                ? {
-                    id: userBooking.id,
-                    bookingType: userBooking.bookingType,
-                    equipmentType: userBooking.equipmentType
-                  }
-                : null,
-              userQueueEntry: userQueueEntry
-                ? {
-                    id: userQueueEntry.id,
-                    bookingType: userQueueEntry.bookingType,
-                    equipmentType: userQueueEntry.equipmentType,
-                    position: userQueueEntry.position
-                  }
-                : null,
-              queueCount,
-              bookedCount: bookingsStartingHere.length  // Only count bookings starting here
-            }
-          })
+        const bookingsStartingHere = existingBookings.filter(
+          (b) => b.startTime === startTime && b.duration === duration
         )
 
         return {
-          startTime,
-          durations: durationAvailability
+          duration,
+          exclusive: { status: exclusiveStatus, reason: exclusiveReason },
+          shared: sharedAvailability,
+          userBooking: userBooking
+            ? {
+                id: userBooking.id,
+                bookingType: userBooking.bookingType,
+                equipmentType: userBooking.equipmentType,
+              }
+            : null,
+          userQueueEntry: userQueueEntry
+            ? {
+                id: userQueueEntry.id,
+                bookingType: userQueueEntry.bookingType,
+                equipmentType: userQueueEntry.equipmentType,
+                position: userQueueEntry.position,
+              }
+            : null,
+          queueCount,
+          bookedCount: bookingsStartingHere.length,
         }
       })
-    )
 
-    return NextResponse.json({
-      date: dateStr,
-      facilityType,
-      slots
+      return { startTime, durations: durationAvailability }
     })
+
+    return NextResponse.json({ date: dateStr, facilityType, slots })
   } catch (error) {
     console.error("Availability error:", error)
     return NextResponse.json(

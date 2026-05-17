@@ -106,6 +106,24 @@ export default function ManagerPage() {
               </CardContent>
             </Card>
           </Link>
+
+          <Link href="/manager/qr-code">
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
+              <CardHeader>
+                <CardTitle>Registration QR Code</CardTitle>
+                <CardDescription>Onboard new residents</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-600">
+                  • Generate registration link
+                  <br />
+                  • Display QR code in lobby
+                  <br />
+                  • Print a sign for the building
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
       </main>
     </div>

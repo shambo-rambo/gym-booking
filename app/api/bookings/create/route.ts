@@ -5,10 +5,10 @@ import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { z } from "zod"
 import {
   validateBookingTime,
-  checkBookingLimits,
+  checkConsecutiveDays,
+  checkDailyLimit,
+  checkSessionLimit,
   isSlotAvailable,
-  canBookExclusiveSlot,
-  canBookSharedSlot
 } from "@/lib/booking-rules"
 import { sendNotification } from "@/lib/notifications"
 import { format } from "date-fns"
@@ -97,47 +97,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validation 3: Check booking limits
-    const limitsCheck = await checkBookingLimits(userId, bookingType as BookingType, facilityType as FacilityType)
-    if (!limitsCheck.allowed) {
-      return NextResponse.json(
-        { error: limitsCheck.reason },
-        { status: 400 }
-      )
+    // Validation 3: Max 3 upcoming sessions per facility
+    const sessionCheck = await checkSessionLimit(userId, facilityType as FacilityType)
+    if (!sessionCheck.allowed) {
+      return NextResponse.json({ error: sessionCheck.reason }, { status: 400 })
     }
 
-    // Validation 4: Check anti-hoarding rules
-    if (bookingType === BookingType.EXCLUSIVE) {
-      const antiHoardingCheck = await canBookExclusiveSlot(
-        userId,
-        facilityType as FacilityType,
-        date,
-        startTime,
-        duration
-      )
-      if (!antiHoardingCheck.allowed) {
-        return NextResponse.json(
-          { error: antiHoardingCheck.reason },
-          { status: 400 }
-        )
-      }
-    } else {
-      const antiHoardingCheck = await canBookSharedSlot(
-        userId,
-        facilityType as FacilityType,
-        equipmentType as EquipmentType || null,
-        date,
-        startTime
-      )
-      if (!antiHoardingCheck.allowed) {
-        return NextResponse.json(
-          { error: antiHoardingCheck.reason },
-          { status: 400 }
-        )
-      }
+    // Validation 4: Max 1 hour per day per facility
+    const dailyCheck = await checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration)
+    if (!dailyCheck.allowed) {
+      return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
     }
 
-    // Validation 5 & 6: Check availability and create booking in transaction
+    // Validation 5: No same start time on consecutive days
+    const consecutiveCheck = await checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime)
+    if (!consecutiveCheck.allowed) {
+      return NextResponse.json({ error: consecutiveCheck.reason }, { status: 400 })
+    }
+
+    // Validation 6: Check availability and create booking in transaction
     // This handles race conditions
     try {
       const booking = await prisma.$transaction(async (tx) => {

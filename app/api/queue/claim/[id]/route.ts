@@ -3,10 +3,10 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import {
   validateBookingTime,
-  checkBookingLimits,
+  checkSessionLimit,
+  checkDailyLimit,
+  checkConsecutiveDays,
   isSlotAvailable,
-  canBookExclusiveSlot,
-  canBookSharedSlot
 } from "@/lib/booking-rules"
 import { BookingType, FacilityType, EquipmentType } from "@prisma/client"
 import { sendNotification } from "@/lib/notifications"
@@ -79,49 +79,20 @@ export async function POST(
       )
     }
 
-    // Check booking limits
-    const limitsCheck = await checkBookingLimits(
-      userId,
-      queueEntry.bookingType,
-      queueEntry.facilityType
-    )
-
-    if (!limitsCheck.allowed) {
-      return NextResponse.json(
-        { error: limitsCheck.reason },
-        { status: 400 }
-      )
+    // Check booking rules
+    const sessionCheck = await checkSessionLimit(userId, queueEntry.facilityType)
+    if (!sessionCheck.allowed) {
+      return NextResponse.json({ error: sessionCheck.reason }, { status: 400 })
     }
 
-    // Check anti-hoarding rules
-    if (queueEntry.bookingType === BookingType.EXCLUSIVE) {
-      const antiHoardingCheck = await canBookExclusiveSlot(
-        userId,
-        queueEntry.facilityType,
-        queueEntry.date,
-        queueEntry.startTime,
-        queueEntry.duration
-      )
-      if (!antiHoardingCheck.allowed) {
-        return NextResponse.json(
-          { error: antiHoardingCheck.reason },
-          { status: 400 }
-        )
-      }
-    } else {
-      const antiHoardingCheck = await canBookSharedSlot(
-        userId,
-        queueEntry.facilityType,
-        queueEntry.equipmentType,
-        queueEntry.date,
-        queueEntry.startTime
-      )
-      if (!antiHoardingCheck.allowed) {
-        return NextResponse.json(
-          { error: antiHoardingCheck.reason },
-          { status: 400 }
-        )
-      }
+    const dailyCheck = await checkDailyLimit(userId, queueEntry.facilityType, queueEntry.date, queueEntry.startTime, queueEntry.duration)
+    if (!dailyCheck.allowed) {
+      return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
+    }
+
+    const consecutiveCheck = await checkConsecutiveDays(userId, queueEntry.facilityType, queueEntry.date, queueEntry.startTime)
+    if (!consecutiveCheck.allowed) {
+      return NextResponse.json({ error: consecutiveCheck.reason }, { status: 400 })
     }
 
     // Create booking and delete queue entry in transaction

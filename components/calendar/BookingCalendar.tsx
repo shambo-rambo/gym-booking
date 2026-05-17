@@ -6,14 +6,25 @@ import {
   getDay, isSameDay, isToday, subMonths, addMonths,
 } from "date-fns"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { FacilityType, EquipmentType } from "@prisma/client"
+import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { BookingDialog } from "./BookingDialog"
 import { cn } from "@/lib/utils"
+import type { DayAvailability, DisplayStatus, SlotAvailability } from "@/lib/types"
 
 interface BookingCalendarProps {
   facilityType: FacilityType
-  equipmentFilter?: EquipmentType | "all"
+  defaultBookingType?: BookingType
+  defaultEquipment?: EquipmentType[]
 }
+
+const ALL_SLOTS = [
+  "05:00","05:30","06:00","06:30","07:00","07:30",
+  "08:00","08:30","09:00","09:30","10:00","10:30",
+  "11:00","11:30","12:00","12:30","13:00","13:30",
+  "14:00","14:30","15:00","15:30","16:00","16:30",
+  "17:00","17:30","18:00","18:30","19:00","19:30",
+  "20:00","20:30","21:00","21:30","22:00","22:30",
+]
 
 function getPeriod(time: string): string {
   const hour = parseInt(time.split(":")[0])
@@ -23,43 +34,43 @@ function getPeriod(time: string): string {
   return "Night"
 }
 
-function getSlotStatus(slot: any): string {
+function getSlotStatus(slot: SlotAvailability | undefined): DisplayStatus {
   if (!slot?.durations?.length) return "available"
-  if (slot.durations.some((d: any) => d.userBooking)) return "yours"
-  if (slot.durations.some((d: any) => d.userQueueEntry)) return "queued"
-  if (slot.durations.some((d: any) => d.exclusive?.status === "blocked")) return "blocked"
-  const allFull = slot.durations.every((d: any) => {
+  if (slot.durations.some((d) => d.userBooking !== null)) return "yours"
+  if (slot.durations.some((d) => d.userQueueEntry !== null)) return "queued"
+  if (slot.durations.some((d) => d.exclusive?.status === "blocked")) return "blocked"
+  const allFull = slot.durations.every((d) => {
     const sharedFull =
       d.shared &&
-      Object.values(d.shared).every((s: any) => s === "booked" || s === "full")
+      Object.values(d.shared).every((s) => s === "booked" || s === "full")
     return d.exclusive?.status === "booked" || d.bookedCount >= 2 || sharedFull
   })
   if (allFull) return "full"
   const allUnavailable = slot.durations.every(
-    (d: any) => d.exclusive?.status === "unavailable"
+    (d) => d.exclusive?.status === "unavailable"
   )
   if (allUnavailable) return "unavailable"
   return "available"
 }
 
-function getStatusText(slot: any, status: string): string {
+function getStatusText(slot: SlotAvailability | undefined, status: DisplayStatus): string {
   switch (status) {
     case "yours": {
-      const d = slot.durations.find((d: any) => d.userBooking)
+      const d = slot?.durations.find((d) => d.userBooking !== null)
       return d?.userBooking?.bookingType === "EXCLUSIVE"
         ? "Your exclusive"
         : "Your booking"
     }
     case "queued": {
-      const d = slot.durations.find((d: any) => d.userQueueEntry)
+      const d = slot?.durations.find((d) => d.userQueueEntry !== null)
       return d?.userQueueEntry?.position
         ? `Queue #${d.userQueueEntry.position}`
         : "In queue"
     }
     case "full": {
       const maxQueue = Math.max(
-        slot.durations[0]?.queueCount || 0,
-        slot.durations[1]?.queueCount || 0
+        slot?.durations[0]?.queueCount ?? 0,
+        slot?.durations[1]?.queueCount ?? 0
       )
       return maxQueue > 0 ? `Full · ${maxQueue} waiting` : "Fully booked"
     }
@@ -67,8 +78,8 @@ function getStatusText(slot: any, status: string): string {
     case "unavailable": return "Limit reached"
     default: {
       const maxQueue = Math.max(
-        slot.durations[0]?.queueCount || 0,
-        slot.durations[1]?.queueCount || 0
+        slot?.durations[0]?.queueCount ?? 0,
+        slot?.durations[1]?.queueCount ?? 0
       )
       return maxQueue > 0 ? `${maxQueue} in queue` : "Available"
     }
@@ -77,7 +88,8 @@ function getStatusText(slot: any, status: string): string {
 
 export function BookingCalendar({
   facilityType,
-  equipmentFilter = "all",
+  defaultBookingType,
+  defaultEquipment = [],
 }: BookingCalendarProps) {
   const today = useMemo(() => {
     const d = new Date()
@@ -90,20 +102,18 @@ export function BookingCalendar({
   const [viewMonth, setViewMonth] = useState(today)
   const [selectedDate, setSelectedDate] = useState(today)
   const [timeFilter, setTimeFilter] = useState<"all" | "morning" | "afternoon" | "evening">("all")
-  const [availabilityData, setAvailabilityData] = useState<Record<string, any>>({})
+  const [availabilityData, setAvailabilityData] = useState<Record<string, DayAvailability>>({})
   const [loading, setLoading] = useState(true)
   const [selectedSlot, setSelectedSlot] = useState<{
     date: Date
     startTime: string
-    availability: any
+    availability: SlotAvailability
   } | null>(null)
 
-  // Calendar days for mini month picker
   const calendarDays = useMemo(() => {
     const start = startOfMonth(viewMonth)
     const end = endOfMonth(viewMonth)
     const days = eachDayOfInterval({ start, end })
-    // Monday-first offset
     const firstDow = getDay(start)
     const offset = firstDow === 0 ? 6 : firstDow - 1
     return [...Array(offset).fill(null), ...days]
@@ -116,7 +126,7 @@ export function BookingCalendar({
         const res = await fetch(
           `/api/bookings/availability?facilityType=${facilityType}&date=${dateStr}`
         )
-        if (res.ok) return { dateStr, data: await res.json() }
+        if (res.ok) return { dateStr, data: await res.json() as DayAvailability }
       } catch (err) {
         console.error(`Failed to fetch availability for ${dateStr}:`, err)
       }
@@ -127,17 +137,19 @@ export function BookingCalendar({
 
   const fetchForDate = useCallback(async () => {
     setLoading(true)
-    const [cur, prev, next] = await Promise.all([
-      fetchDay(selectedDate),
+    const cur = await fetchDay(selectedDate)
+    if (cur) setAvailabilityData((old) => ({ ...old, [cur.dateStr]: cur.data }))
+    setLoading(false)
+
+    // Prefetch neighbours after the current day is shown
+    Promise.all([
       fetchDay(addDays(selectedDate, -1)),
       fetchDay(addDays(selectedDate, 1)),
-    ])
-    const newData: Record<string, any> = {}
-    ;[cur, prev, next].forEach((r) => {
-      if (r) newData[r.dateStr] = r.data
+    ]).then((results) => {
+      const extra: Record<string, DayAvailability> = {}
+      results.forEach((r) => { if (r) extra[r.dateStr] = r.data })
+      if (Object.keys(extra).length) setAvailabilityData((old) => ({ ...old, ...extra }))
     })
-    setAvailabilityData((old) => ({ ...old, ...newData }))
-    setLoading(false)
   }, [selectedDate, fetchDay])
 
   useEffect(() => {
@@ -159,29 +171,24 @@ export function BookingCalendar({
     [viewMonth, maxDate]
   )
 
-  const allSlots = [
-    "05:00","05:30","06:00","06:30","07:00","07:30",
-    "08:00","08:30","09:00","09:30","10:00","10:30",
-    "11:00","11:30","12:00","12:30","13:00","13:30",
-    "14:00","14:30","15:00","15:30","16:00","16:30",
-    "17:00","17:30","18:00","18:30","19:00","19:30",
-    "20:00","20:30","21:00","21:30",
-  ]
-
-  const now = new Date()
   const isTodaySelected = isSameDay(selectedDate, today)
-  const nowMinutes = now.getHours() * 60 + now.getMinutes()
 
-  const visibleSlots = allSlots.filter((time) => {
-    if (isTodaySelected) {
-      const [h, m] = time.split(":").map(Number)
-      if (h * 60 + m <= nowMinutes) return false
-    }
-    if (timeFilter === "morning")   return time >= "05:00" && time <= "11:30"
-    if (timeFilter === "afternoon") return time >= "12:00" && time <= "16:30"
-    if (timeFilter === "evening")   return time >= "17:00" && time <= "21:30"
-    return true
-  })
+  const visibleSlots = useMemo(() => {
+    const now = new Date()
+    const nowMinutes = now.getHours() * 60 + now.getMinutes()
+    const todaySelected = isSameDay(selectedDate, today)
+
+    return ALL_SLOTS.filter((time) => {
+      if (todaySelected) {
+        const [h, m] = time.split(":").map(Number)
+        if (h * 60 + m <= nowMinutes) return false
+      }
+      if (timeFilter === "morning")   return time >= "05:00" && time <= "11:30"
+      if (timeFilter === "afternoon") return time >= "12:00" && time <= "16:30"
+      if (timeFilter === "evening")   return time >= "17:00" && time <= "22:30"
+      return true
+    })
+  }, [selectedDate, today, timeFilter])
 
   const dayData = availabilityData[format(selectedDate, "yyyy-MM-dd")]
 
@@ -330,7 +337,7 @@ export function BookingCalendar({
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {visibleSlots.map((time) => {
-              const slot = dayData?.slots?.find((s: any) => s.startTime === time)
+              const slot = dayData?.slots?.find((s) => s.startTime === time)
               const status = getSlotStatus(slot)
               const text = getStatusText(slot, status)
               const period = getPeriod(time)
@@ -411,6 +418,8 @@ export function BookingCalendar({
           date={selectedSlot.date}
           startTime={selectedSlot.startTime}
           availability={selectedSlot.availability}
+          defaultBookingType={defaultBookingType}
+          defaultEquipment={defaultEquipment}
           onBookingSuccess={fetchForDate}
         />
       )}

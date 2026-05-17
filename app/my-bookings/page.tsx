@@ -2,22 +2,24 @@
 
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
-import { redirect, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
 import Navbar from "@/components/Navbar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
+import { EQUIPMENT_LABELS } from "@/lib/equipment"
+import type { EquipmentType } from "@prisma/client"
 
 interface Booking {
   id: string
   facilityType: string
   bookingType: string
   equipmentType: string | null
-  date: Date
+  date: string
   startTime: string
   duration: number
-  createdAt: Date
+  createdAt: string
 }
 
 interface QueueEntry {
@@ -25,97 +27,105 @@ interface QueueEntry {
   facilityType: string
   bookingType: string
   equipmentType: string | null
-  date: Date
+  date: string
   startTime: string
   duration: number
   position: number
-  createdAt: Date
+  createdAt: string
+}
+
+// Multiple equipment items at the same slot = one session
+interface BookingSession {
+  ids: string[]
+  facilityType: string
+  bookingType: string
+  equipment: (EquipmentType | null)[]
+  date: string
+  startTime: string
+  duration: number
+  createdAt: string
+}
+
+function groupIntoSessions(bookings: Booking[]): BookingSession[] {
+  const map = new Map<string, BookingSession>()
+  for (const b of bookings) {
+    const key = `${b.facilityType}|${b.date}|${b.startTime}|${b.duration}|${b.bookingType}`
+    const existing = map.get(key)
+    if (existing) {
+      existing.ids.push(b.id)
+      existing.equipment.push(b.equipmentType as EquipmentType | null)
+    } else {
+      map.set(key, {
+        ids: [b.id],
+        facilityType: b.facilityType,
+        bookingType: b.bookingType,
+        equipment: [b.equipmentType as EquipmentType | null],
+        date: b.date,
+        startTime: b.startTime,
+        duration: b.duration,
+        createdAt: b.createdAt,
+      })
+    }
+  }
+  return Array.from(map.values())
+}
+
+function equipmentLabel(e: EquipmentType | null): string {
+  if (!e) return ""
+  return EQUIPMENT_LABELS[e] ?? e
 }
 
 export default function MyBookingsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [bookings, setBookings] = useState<{ upcoming: Booking[], past: Booking[] }>({
-    upcoming: [],
-    past: []
-  })
+  const [bookings, setBookings] = useState<{ upcoming: Booking[]; past: Booking[] }>({ upcoming: [], past: [] })
   const [queueEntries, setQueueEntries] = useState<QueueEntry[]>([])
   const [loading, setLoading] = useState(true)
-  const [cancellingId, setCancellingId] = useState<string | null>(null)
+  const [cancellingKey, setCancellingKey] = useState<string | null>(null)
   const [leavingQueueId, setLeavingQueueId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (status === "authenticated") {
-      fetchBookings()
-    }
+    if (status === "authenticated") fetchBookings()
   }, [status])
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.replace("/login")
+  }, [status, router])
 
   const fetchBookings = async () => {
     try {
-      const response = await fetch("/api/bookings/my-bookings")
-      if (response.ok) {
-        const data = await response.json()
+      const res = await fetch("/api/bookings/my-bookings")
+      if (res.ok) {
+        const data = await res.json()
         setBookings({ upcoming: data.upcoming, past: data.past })
         setQueueEntries(data.queue || [])
       }
-    } catch (error) {
-      console.error("Failed to fetch bookings:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleLeaveQueue = async (queueId: string) => {
-    if (!confirm("Are you sure you want to leave this queue?")) {
-      return
-    }
-
-    setLeavingQueueId(queueId)
-
+  const handleCancel = async (sessionKey: string, ids: string[]) => {
+    if (!confirm("Cancel this booking?")) return
+    setCancellingKey(sessionKey)
     try {
-      const response = await fetch(`/api/queue/${queueId}`, {
-        method: "DELETE"
-      })
-
-      if (response.ok) {
-        // Refresh bookings and queue
-        fetchBookings()
-        router.refresh()
-      } else {
-        const data = await response.json()
-        alert(data.error || "Failed to leave queue")
-      }
-    } catch (error) {
-      alert("Failed to leave queue")
+      await Promise.all(ids.map(id => fetch(`/api/bookings/${id}`, { method: "DELETE" })))
+      fetchBookings()
+      router.refresh()
     } finally {
-      setLeavingQueueId(null)
+      setCancellingKey(null)
     }
   }
 
-  const handleCancel = async (bookingId: string) => {
-    if (!confirm("Are you sure you want to cancel this booking?")) {
-      return
-    }
-
-    setCancellingId(bookingId)
-
+  const handleLeaveQueue = async (queueId: string) => {
+    if (!confirm("Leave this queue?")) return
+    setLeavingQueueId(queueId)
     try {
-      const response = await fetch(`/api/bookings/${bookingId}`, {
-        method: "DELETE"
-      })
-
-      if (response.ok) {
-        // Refresh bookings
-        fetchBookings()
-        router.refresh()
-      } else {
-        const data = await response.json()
-        alert(data.error || "Failed to cancel booking")
-      }
-    } catch (error) {
-      alert("Failed to cancel booking")
+      const res = await fetch(`/api/queue/${queueId}`, { method: "DELETE" })
+      if (res.ok) { fetchBookings(); router.refresh() }
+      else alert((await res.json()).error || "Failed to leave queue")
     } finally {
-      setCancellingId(null)
+      setLeavingQueueId(null)
     }
   }
 
@@ -127,68 +137,65 @@ export default function MyBookingsPage() {
     )
   }
 
-  if (!session) {
-    redirect("/login")
-  }
-
-  const BookingCard = ({ booking, showCancel = true }: { booking: Booking, showCancel?: boolean }) => (
-    <Card key={booking.id}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="text-lg">
-              {booking.facilityType === "GYM" ? "Gym" : "Sauna"}
-            </CardTitle>
-            <CardDescription>
-              {format(new Date(booking.date), "EEEE, MMMM d, yyyy")}
-            </CardDescription>
+  const SessionCard = ({ s, showCancel = true }: { s: BookingSession; showCancel?: boolean }) => {
+    const key = s.ids.join(",")
+    const equipment = s.equipment.filter(Boolean) as EquipmentType[]
+    return (
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between">
+            <div>
+              <CardTitle className="text-lg">
+                {s.facilityType === "GYM" ? "Gym" : "Sauna"}
+              </CardTitle>
+              <CardDescription>
+                {format(new Date(s.date), "EEEE, MMMM d, yyyy")}
+              </CardDescription>
+            </div>
+            <Badge variant={s.bookingType === "EXCLUSIVE" ? "default" : "secondary"}>
+              {s.bookingType === "EXCLUSIVE" ? "Private" : "Shared"}
+            </Badge>
           </div>
-          <Badge variant={booking.bookingType === "EXCLUSIVE" ? "default" : "secondary"}>
-            {booking.bookingType}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Time:</span>
-            <span className="font-medium">{booking.startTime} ({booking.duration} min)</span>
-          </div>
-          {booking.equipmentType && (
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">Equipment:</span>
-              <span className="font-medium">
-                {booking.equipmentType.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
-              </span>
+              <span className="text-gray-600">Time:</span>
+              <span className="font-medium">{s.startTime} ({s.duration} min)</span>
+            </div>
+            {equipment.length > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Equipment:</span>
+                <span className="font-medium text-right">
+                  {equipment.map(e => equipmentLabel(e)).join(", ")}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-gray-600">Booked:</span>
+              <span className="text-gray-500">{format(new Date(s.createdAt), "MMM d, h:mm a")}</span>
+            </div>
+          </div>
+          {showCancel && (
+            <div className="mt-4">
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-full"
+                disabled={cancellingKey === key}
+                onClick={() => handleCancel(key, s.ids)}
+              >
+                {cancellingKey === key ? "Cancelling..." : "Cancel Booking"}
+              </Button>
             </div>
           )}
-          <div className="flex justify-between">
-            <span className="text-gray-600">Booked:</span>
-            <span className="text-sm text-gray-500">
-              {format(new Date(booking.createdAt), "MMM d, h:mm a")}
-            </span>
-          </div>
-        </div>
-
-        {showCancel && (
-          <div className="mt-4">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => handleCancel(booking.id)}
-              disabled={cancellingId === booking.id}
-              className="w-full"
-            >
-              {cancellingId === booking.id ? "Cancelling..." : "Cancel Booking"}
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
+        </CardContent>
+      </Card>
+    )
+  }
 
   const QueueCard = ({ entry }: { entry: QueueEntry }) => (
-    <Card key={entry.id} className="border-blue-200 bg-blue-50">
+    <Card className="border-blue-200 bg-blue-50">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div>
@@ -197,7 +204,7 @@ export default function MyBookingsPage() {
                 {entry.facilityType === "GYM" ? "Gym" : "Sauna"}
               </CardTitle>
               <Badge variant="outline" className="bg-blue-600 text-white border-blue-600">
-                Queue Position: {entry.position}
+                Queue #{entry.position}
               </Badge>
             </div>
             <CardDescription>
@@ -205,7 +212,7 @@ export default function MyBookingsPage() {
             </CardDescription>
           </div>
           <Badge variant={entry.bookingType === "EXCLUSIVE" ? "default" : "secondary"}>
-            {entry.bookingType}
+            {entry.bookingType === "EXCLUSIVE" ? "Private" : "Shared"}
           </Badge>
         </div>
       </CardHeader>
@@ -219,25 +226,22 @@ export default function MyBookingsPage() {
             <div className="flex justify-between">
               <span className="text-gray-600">Equipment:</span>
               <span className="font-medium">
-                {entry.equipmentType.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+                {equipmentLabel(entry.equipmentType as EquipmentType)}
               </span>
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-gray-600">Joined Queue:</span>
-            <span className="text-sm text-gray-500">
-              {format(new Date(entry.createdAt), "MMM d, h:mm a")}
-            </span>
+            <span className="text-gray-600">Joined:</span>
+            <span className="text-gray-500">{format(new Date(entry.createdAt), "MMM d, h:mm a")}</span>
           </div>
         </div>
-
         <div className="mt-4">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleLeaveQueue(entry.id)}
-            disabled={leavingQueueId === entry.id}
             className="w-full"
+            disabled={leavingQueueId === entry.id}
+            onClick={() => handleLeaveQueue(entry.id)}
           >
             {leavingQueueId === entry.id ? "Leaving..." : "Leave Queue"}
           </Button>
@@ -246,58 +250,50 @@ export default function MyBookingsPage() {
     </Card>
   )
 
+  const upcomingSessions = groupIntoSessions(bookings.upcoming)
+  const pastSessions = groupIntoSessions(bookings.past)
+
   return (
     <div className="min-h-screen bg-surface">
       <Navbar />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-20 pb-28">
         <h1 className="text-3xl font-bold mb-6">My Bookings & Queue</h1>
 
-        {/* Queue Entries */}
         {queueEntries.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4 text-blue-600">
-              In Queue ({queueEntries.length})
-            </h2>
+            <h2 className="text-xl font-semibold mb-4 text-blue-600">In Queue ({queueEntries.length})</h2>
             <div className="grid gap-4 md:grid-cols-2">
-              {queueEntries.map(entry => (
-                <QueueCard key={entry.id} entry={entry} />
-              ))}
+              {queueEntries.map(entry => <QueueCard key={entry.id} entry={entry} />)}
             </div>
           </div>
         )}
 
-        {/* Upcoming Bookings */}
         <div className="mb-8">
           <h2 className="text-xl font-semibold mb-4">Upcoming Bookings</h2>
-          {bookings.upcoming.length === 0 && queueEntries.length === 0 ? (
+          {upcomingSessions.length === 0 && queueEntries.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-gray-500">
-                No upcoming bookings or queue entries. Book a slot from the calendar!
+                No upcoming bookings. Book a slot from the calendar!
               </CardContent>
             </Card>
-          ) : bookings.upcoming.length === 0 ? (
+          ) : upcomingSessions.length === 0 ? (
             <Card>
               <CardContent className="py-8 text-center text-gray-500">
-                No confirmed bookings yet. Your queue entries are shown above.
+                No confirmed bookings yet.
               </CardContent>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
-              {bookings.upcoming.map(booking => (
-                <BookingCard key={booking.id} booking={booking} />
-              ))}
+              {upcomingSessions.map(s => <SessionCard key={s.ids.join(",")} s={s} />)}
             </div>
           )}
         </div>
 
-        {/* Past Bookings */}
-        {bookings.past.length > 0 && (
+        {pastSessions.length > 0 && (
           <div>
             <h2 className="text-xl font-semibold mb-4">Past</h2>
             <div className="grid gap-4 md:grid-cols-2">
-              {bookings.past.map(booking => (
-                <BookingCard key={booking.id} booking={booking} showCancel={false} />
-              ))}
+              {pastSessions.map(s => <SessionCard key={s.ids.join(",")} s={s} showCancel={false} />)}
             </div>
           </div>
         )}

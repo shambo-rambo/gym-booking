@@ -8,6 +8,11 @@ const updateSettingsSchema = z.object({
   phoneNumber: z.string().optional()
 })
 
+const updateProfileSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  email: z.string().email("Invalid email address")
+})
+
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
@@ -41,6 +46,42 @@ export async function GET(request: NextRequest) {
       { error: "Failed to get settings" },
       { status: 500 }
     )
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const session = await auth()
+
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const userId = (session.user as any).id
+    const body = await request.json()
+    const validatedData = updateProfileSchema.parse(body)
+
+    const existing = await prisma.user.findFirst({
+      where: { email: validatedData.email, NOT: { id: userId } }
+    })
+    if (existing) {
+      return NextResponse.json({ error: "Email already in use" }, { status: 409 })
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { name: validatedData.name, email: validatedData.email },
+      select: { email: true, name: true, phoneNumber: true, notificationPreference: true, apartmentNumber: true }
+    })
+
+    return NextResponse.json({ success: true, user: updatedUser })
+
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
+    }
+    console.error("Update profile error:", error)
+    return NextResponse.json({ error: "Failed to update profile" }, { status: 500 })
   }
 }
 

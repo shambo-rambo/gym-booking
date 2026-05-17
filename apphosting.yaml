@@ -53,5 +53,16 @@ env:
     availability:
       - RUNTIME
 
+  - variable: GOOGLE_CLIENT_ID
+    secret: GOOGLE_CLIENT_ID
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: GOOGLE_CLIENT_SECRET
+    secret: GOOGLE_CLIENT_SECRET
+    availability:
+      - RUNTIME
+
   # Twilio (SMS) — skipped for now, app uses email only
   # Uncomment and add secrets when ready to enable SMS

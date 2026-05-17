@@ -38,9 +38,14 @@ env:
       - RUNTIME
 
   - variable: NEXT_PUBLIC_APP_URL
-    value: "https://watertower-gym--gym-booking.asia-southeast1.hosted.app"
+    value: "https://gym-booking--watertower-gym.asia-southeast1.hosted.app"
     availability:
       - BUILD
+      - RUNTIME
+
+  - variable: AUTH_URL
+    value: "https://gym-booking--watertower-gym.asia-southeast1.hosted.app"
+    availability:
       - RUNTIME
 
   # Twilio (SMS) — skipped for now, app uses email only

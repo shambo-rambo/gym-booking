@@ -11,6 +11,11 @@ env:
     availability:
       - RUNTIME
 
+  - variable: DIRECT_URL
+    secret: DIRECT_URL
+    availability:
+      - RUNTIME
+
   - variable: AUTH_SECRET
     secret: AUTH_SECRET
     availability:

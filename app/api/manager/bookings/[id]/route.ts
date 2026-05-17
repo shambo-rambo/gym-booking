@@ -6,6 +6,8 @@ import { notifyNextInQueue } from "@/lib/queue-notifications"
 import { format } from "date-fns"
 import { z } from "zod"
 
+export const dynamic = 'force-dynamic'
+
 const cancelBookingSchema = z.object({
   reason: z.string().optional(),
   notifyUser: z.boolean().default(true)

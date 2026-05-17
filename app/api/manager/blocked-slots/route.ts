@@ -6,6 +6,8 @@ import { sendNotification } from "@/lib/notifications"
 import { format } from "date-fns"
 import { parseLocalDate } from "@/lib/date-utils"
 
+export const dynamic = 'force-dynamic'
+
 const createBlockedSlotSchema = z.object({
   facilityType: z.enum(["GYM", "SAUNA"]),
   date: z.string(),

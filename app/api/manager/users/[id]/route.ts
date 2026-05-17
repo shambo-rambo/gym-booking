@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { sendNotification } from "@/lib/notifications"
 import { z } from "zod"
 
+export const dynamic = 'force-dynamic'
+
 const updateUserSchema = z.object({
   status: z.enum(["VERIFIED", "DEACTIVATED"])
 })

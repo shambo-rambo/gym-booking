@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { parseSlotDateTime } from "@/lib/booking-rules"
 import { notifyNextInQueue } from "@/lib/queue-notifications"
 
+export const dynamic = 'force-dynamic'
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }

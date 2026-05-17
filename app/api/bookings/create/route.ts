@@ -14,6 +14,8 @@ import { sendNotification } from "@/lib/notifications"
 import { format } from "date-fns"
 import { parseLocalDate } from "@/lib/date-utils"
 
+export const dynamic = 'force-dynamic'
+
 const createBookingSchema = z.object({
   facilityType: z.enum(["GYM", "SAUNA"]),
   bookingType: z.enum(["EXCLUSIVE", "SHARED"]),

@@ -5,6 +5,8 @@ import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { generateTimeSlots } from "@/lib/booking-rules"
 import { parseLocalDate } from "@/lib/date-utils"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()

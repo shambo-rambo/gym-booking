@@ -6,6 +6,8 @@ import { z } from "zod"
 import { isSlotAvailable, checkConsecutiveDays, checkDailyLimit, checkSessionLimit } from "@/lib/booking-rules"
 import { parseLocalDate } from "@/lib/date-utils"
 
+export const dynamic = 'force-dynamic'
+
 const joinQueueSchema = z.object({
   facilityType: z.enum(["GYM", "SAUNA"]),
   bookingType: z.enum(["EXCLUSIVE", "SHARED"]),

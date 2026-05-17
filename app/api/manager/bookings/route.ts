@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma"
 import { format } from "date-fns"
 import { parseLocalDate } from "@/lib/date-utils"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()

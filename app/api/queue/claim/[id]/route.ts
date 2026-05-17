@@ -12,6 +12,8 @@ import { BookingType, FacilityType, EquipmentType } from "@prisma/client"
 import { sendNotification } from "@/lib/notifications"
 import { format } from "date-fns"
 
+export const dynamic = 'force-dynamic'
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }

@@ -56,21 +56,21 @@ function getSlotStatus(slot: SlotAvailability | undefined): DisplayStatus {
 function getStatusText(slot: SlotAvailability | undefined, status: DisplayStatus): string {
   switch (status) {
     case "yours": {
-      const d = slot?.durations.find((d) => d.userBooking !== null)
+      const d = slot?.durations?.find((d) => d.userBooking !== null)
       return d?.userBooking?.bookingType === "EXCLUSIVE"
         ? "Your exclusive"
         : "Your booking"
     }
     case "queued": {
-      const d = slot?.durations.find((d) => d.userQueueEntry !== null)
+      const d = slot?.durations?.find((d) => d.userQueueEntry !== null)
       return d?.userQueueEntry?.position
         ? `Queue #${d.userQueueEntry.position}`
         : "In queue"
     }
     case "full": {
       const maxQueue = Math.max(
-        slot?.durations[0]?.queueCount ?? 0,
-        slot?.durations[1]?.queueCount ?? 0
+        slot?.durations?.[0]?.queueCount ?? 0,
+        slot?.durations?.[1]?.queueCount ?? 0
       )
       return maxQueue > 0 ? `Full · ${maxQueue} waiting` : "Fully booked"
     }
@@ -78,8 +78,8 @@ function getStatusText(slot: SlotAvailability | undefined, status: DisplayStatus
     case "unavailable": return "Limit reached"
     default: {
       const maxQueue = Math.max(
-        slot?.durations[0]?.queueCount ?? 0,
-        slot?.durations[1]?.queueCount ?? 0
+        slot?.durations?.[0]?.queueCount ?? 0,
+        slot?.durations?.[1]?.queueCount ?? 0
       )
       return maxQueue > 0 ? `${maxQueue} in queue` : "Available"
     }
@@ -104,6 +104,7 @@ export function BookingCalendar({
   const [timeFilter, setTimeFilter] = useState<"all" | "morning" | "afternoon" | "evening">("all")
   const [availabilityData, setAvailabilityData] = useState<Record<string, DayAvailability>>({})
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState(false)
   const [selectedSlot, setSelectedSlot] = useState<{
     date: Date
     startTime: string
@@ -137,8 +138,13 @@ export function BookingCalendar({
 
   const fetchForDate = useCallback(async () => {
     setLoading(true)
+    setFetchError(false)
     const cur = await fetchDay(selectedDate)
-    if (cur) setAvailabilityData((old) => ({ ...old, [cur.dateStr]: cur.data }))
+    if (cur) {
+      setAvailabilityData((old) => ({ ...old, [cur.dateStr]: cur.data }))
+    } else {
+      setFetchError(true)
+    }
     setLoading(false)
 
     // Prefetch neighbours after the current day is shown
@@ -323,6 +329,16 @@ export function BookingCalendar({
             {Array.from({ length: 9 }).map((_, i) => (
               <div key={i} className="h-[88px] bg-surface-container animate-pulse rounded-xl" />
             ))}
+          </div>
+        ) : fetchError ? (
+          <div className="text-center py-16 text-on-surface-variant">
+            <p className="font-semibold">Could not load availability</p>
+            <button
+              onClick={fetchForDate}
+              className="text-sm text-secondary underline mt-2"
+            >
+              Try again
+            </button>
           </div>
         ) : visibleSlots.length === 0 ? (
           <div className="text-center py-16 text-on-surface-variant">

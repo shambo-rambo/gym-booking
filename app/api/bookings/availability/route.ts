@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
-import {
-  generateTimeSlots,
-  getWeekStart,
-  getWeekEnd,
-} from "@/lib/booking-rules"
+import { generateTimeSlots } from "@/lib/booking-rules"
 import { parseLocalDate } from "@/lib/date-utils"
 
 export async function GET(request: NextRequest) {
@@ -257,9 +253,11 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ date: dateStr, facilityType, slots })
   } catch (error) {
-    console.error("Availability error:", error)
+    const message = error instanceof Error ? error.message : String(error)
+    const code = (error as any)?.code ?? "UNKNOWN"
+    console.error("Availability error:", { code, message, error })
     return NextResponse.json(
-      { error: "Failed to fetch availability" },
+      { error: "Failed to fetch availability", code, detail: message },
       { status: 500 }
     )
   }

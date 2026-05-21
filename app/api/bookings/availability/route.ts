@@ -253,7 +253,10 @@ export async function GET(request: NextRequest) {
       return { startTime, durations: durationAvailability }
     })
 
-    return NextResponse.json({ date: dateStr, facilityType, slots })
+    return NextResponse.json(
+      { date: dateStr, facilityType, slots },
+      { headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=30" } }
+    )
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const code = (error as any)?.code ?? "UNKNOWN"

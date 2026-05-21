@@ -8,7 +8,6 @@ import {
   checkConsecutiveDays,
   checkDailyLimit,
   checkSessionLimit,
-  isSlotAvailable,
 } from "@/lib/booking-rules"
 import { sendNotification } from "@/lib/notifications"
 import { format } from "date-fns"
@@ -99,40 +98,56 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validation 3: Max 3 upcoming sessions per facility
-    const sessionCheck = await checkSessionLimit(userId, facilityType as FacilityType)
+    // Validations 3-5: run all read-only checks in parallel
+    const [sessionCheck, dailyCheck, consecutiveCheck] = await Promise.all([
+      checkSessionLimit(userId, facilityType as FacilityType),
+      checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration),
+      checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime),
+    ])
+
     if (!sessionCheck.allowed) {
       return NextResponse.json({ error: sessionCheck.reason }, { status: 400 })
     }
-
-    // Validation 4: Max 1 hour per day per facility
-    const dailyCheck = await checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration)
     if (!dailyCheck.allowed) {
       return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
     }
-
-    // Validation 5: No same start time on consecutive days
-    const consecutiveCheck = await checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime)
     if (!consecutiveCheck.allowed) {
       return NextResponse.json({ error: consecutiveCheck.reason }, { status: 400 })
     }
 
     // Validation 6: Check availability and create booking in transaction
-    // This handles race conditions
+    // Transaction is kept minimal (reads parallel, write last) to avoid timeouts
     try {
       const booking = await prisma.$transaction(async (tx) => {
-        // Re-check availability inside transaction
-        const availabilityCheck = await isSlotAvailable(
-          facilityType as FacilityType,
-          bookingType as BookingType,
-          equipmentType as EquipmentType || null,
-          date,
-          startTime,
-          duration
-        )
+        // Re-check availability inside transaction with parallel reads
+        const [slotHour, slotMinute] = startTime.split(':').map(Number)
+        const slotStart = slotHour * 60 + slotMinute
+        const slotEnd = slotStart + duration
 
-        if (!availabilityCheck.allowed) {
-          throw new Error(availabilityCheck.reason || "Slot is not available")
+        const [blockedSlot, allBookings] = await Promise.all([
+          tx.blockedSlot.findFirst({ where: { facilityType: facilityType as FacilityType, date, startTime, duration } }),
+          tx.booking.findMany({ where: { facilityType: facilityType as FacilityType, date } }),
+        ])
+
+        if (blockedSlot) throw new Error(blockedSlot.reason)
+
+        const overlapping = allBookings.filter(b => {
+          const [bh, bm] = b.startTime.split(':').map(Number)
+          const bStart = bh * 60 + bm
+          return bStart < slotEnd && bStart + b.duration > slotStart
+        })
+
+        const hasExclusive = overlapping.some(b => b.bookingType === BookingType.EXCLUSIVE)
+        if (hasExclusive) throw new Error("Slot has an exclusive booking.")
+
+        if (bookingType === BookingType.EXCLUSIVE) {
+          if (overlapping.length > 0) throw new Error("Slot is already booked.")
+        } else if (facilityType === FacilityType.SAUNA) {
+          if (overlapping.length >= 2) throw new Error("Sauna is full (2 people max).")
+        } else {
+          if (overlapping.some(b => b.equipmentType === (equipmentType as EquipmentType))) {
+            throw new Error("This equipment is already booked.")
+          }
         }
 
         // Create the booking

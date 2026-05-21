@@ -110,6 +110,15 @@ async function sendSMS(
   }
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 function generateNotificationContent(type: NotificationType, data: NotificationData) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const manageUrl = data.manageUrl || `${appUrl}/my-bookings`
@@ -201,7 +210,7 @@ function generateNotificationContent(type: NotificationType, data: NotificationD
               <p style="margin: 5px 0;"><strong>Facility:</strong> ${data.facilityType}</p>
               <p style="margin: 5px 0;"><strong>Date:</strong> ${data.date}</p>
               <p style="margin: 5px 0;"><strong>Time:</strong> ${data.startTime}</p>
-              ${data.reason ? `<p style="margin: 10px 0 0 0;"><strong>Reason:</strong> ${data.reason}</p>` : ''}
+              ${data.reason ? `<p style="margin: 10px 0 0 0;"><strong>Reason:</strong> ${escapeHtml(data.reason)}</p>` : ''}
             </div>
             <p>We apologize for any inconvenience.</p>
           </div>

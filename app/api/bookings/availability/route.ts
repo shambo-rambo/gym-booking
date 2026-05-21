@@ -15,15 +15,21 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = request.nextUrl
-    const facilityType = searchParams.get("facilityType") as FacilityType
+    const facilityTypeParam = searchParams.get("facilityType")
     const dateStr = searchParams.get("date")
 
-    if (!facilityType || !dateStr) {
+    if (!facilityTypeParam || !dateStr) {
       return NextResponse.json(
         { error: "facilityType and date are required" },
         { status: 400 }
       )
     }
+
+    const validFacilityTypes = Object.values(FacilityType) as string[]
+    if (!validFacilityTypes.includes(facilityTypeParam)) {
+      return NextResponse.json({ error: "Invalid facilityType" }, { status: 400 })
+    }
+    const facilityType = facilityTypeParam as FacilityType
 
     const date = parseLocalDate(dateStr)
     const userId = (session.user as any).id
@@ -258,11 +264,9 @@ export async function GET(request: NextRequest) {
       { headers: { "Cache-Control": "private, max-age=10, stale-while-revalidate=30" } }
     )
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    const code = (error as any)?.code ?? "UNKNOWN"
-    console.error("Availability error:", { code, message, error })
+    console.error("Availability error:", error)
     return NextResponse.json(
-      { error: "Failed to fetch availability", code, detail: message },
+      { error: "Failed to fetch availability" },
       { status: 500 }
     )
   }

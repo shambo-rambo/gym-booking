@@ -15,16 +15,20 @@ export async function GET(request: NextRequest) {
 
     const now = new Date()
 
-    // Find bookings starting in 2 hours
-    const twoHoursFromNow = new Date(now.getTime() + 2 * 60 * 60 * 1000)
-    const twoHoursOneMinuteFromNow = new Date(now.getTime() + (2 * 60 + 1) * 60 * 1000)
+    // Query by calendar date only (date column stores midnight UTC).
+    // Comparing a full datetime against @db.Date causes today's bookings to never
+    // match (stored as 00:00:00Z < current time), so we fetch today + tomorrow
+    // and filter precisely in code below.
+    const startOfToday = new Date(now)
+    startOfToday.setUTCHours(0, 0, 0, 0)
+    const startOfDayAfterTomorrow = new Date(startOfToday)
+    startOfDayAfterTomorrow.setUTCDate(startOfDayAfterTomorrow.getUTCDate() + 2)
 
-    // Get bookings in the 2-hour window
     const upcomingBookings = await prisma.booking.findMany({
       where: {
         date: {
-          gte: now,
-          lte: twoHoursOneMinuteFromNow
+          gte: startOfToday,
+          lt: startOfDayAfterTomorrow,
         }
       },
       include: {

@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
 import Navbar from "@/components/Navbar"
 import { BookingCalendar } from "@/components/calendar/BookingCalendar"
+import { BookingRules } from "@/components/BookingRules"
 import { FacilityType, BookingType } from "@prisma/client"
 import { cn } from "@/lib/utils"
 
@@ -29,6 +29,7 @@ export default function Home() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [mode, setMode] = useState<BookingMode>("shared-gym")
+  const [showRules, setShowRules] = useState(false)
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -61,10 +62,10 @@ export default function Home() {
             {MODES.map(({ value, label }) => (
               <button
                 key={value}
-                onClick={() => setMode(value)}
+                onClick={() => { setMode(value); setShowRules(false) }}
                 className={cn(
                   "px-5 py-2.5 rounded-md font-semibold text-sm transition-all active:scale-95",
-                  mode === value
+                  !showRules && mode === value
                     ? "bg-primary text-on-primary shadow-card"
                     : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
                 )}
@@ -72,13 +73,29 @@ export default function Home() {
                 {label}
               </button>
             ))}
+
+            <button
+              onClick={() => setShowRules((v) => !v)}
+              className={cn(
+                "px-5 py-2.5 rounded-md font-semibold text-sm transition-all active:scale-95 ml-auto",
+                showRules
+                  ? "bg-secondary text-on-secondary shadow-card"
+                  : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+              )}
+            >
+              Booking Rules
+            </button>
           </div>
         </div>
 
-        <BookingCalendar
-          facilityType={modeToFacility(mode)}
-          defaultBookingType={modeToBookingType(mode)}
-        />
+        {showRules ? (
+          <BookingRules />
+        ) : (
+          <BookingCalendar
+            facilityType={modeToFacility(mode)}
+            defaultBookingType={modeToBookingType(mode)}
+          />
+        )}
       </main>
     </div>
   )

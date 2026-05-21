@@ -3,14 +3,16 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { CalendarDays, BookOpen, Clock, User, Shield, LogOut } from "lucide-react"
+import { CalendarDays, BookOpen, Clock, User, Shield, LogOut, Home } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
 const PAGE_TITLES: Record<string, string> = {
-  "/":                       "Reserve Your Space",
+  "/":                       "My Bookings",
+  "/book":                   "Reserve Your Space",
   "/my-bookings":            "My Bookings",
-  "/queue":                  "Queue",
+  "/waitlist":               "Waitlist",
+  "/queue":                  "Waitlist",
   "/settings":               "Settings",
   "/manager":                "Dashboard",
   "/manager/users":          "Residents",
@@ -37,9 +39,9 @@ export default function Navbar() {
     .slice(0, 2) ?? "?"
 
   const navItems = [
-    { href: "/",           label: "Book",     icon: CalendarDays },
-    { href: "/my-bookings",label: "Bookings", icon: BookOpen },
-    { href: "/queue",      label: "Queue",    icon: Clock },
+    { href: "/",           label: "Home",     icon: Home },
+    { href: "/book",       label: "Book",     icon: CalendarDays },
+    { href: "/queue",      label: "Waitlist", icon: Clock },
     ...(isManager ? [{ href: "/manager", label: "Admin", icon: Shield }] : []),
     { href: "/settings",   label: "Profile",  icon: User },
   ]
@@ -123,7 +125,7 @@ export default function Navbar() {
         <div className="flex justify-around items-center px-2 py-2 max-w-lg mx-auto">
           {navItems.map(({ href, label, icon: Icon }) => {
             const isActive =
-              href === "/" ? pathname === "/" : pathname.startsWith(href)
+              href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/")
             return (
               <Link
                 key={href}

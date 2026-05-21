@@ -199,9 +199,38 @@ export function BookingCalendar({
   const dayData = availabilityData[format(selectedDate, "yyyy-MM-dd")]
 
   return (
+    <div>
+      {/* ── Mobile date carousel ── */}
+      <div className="lg:hidden mb-5 -mx-4 px-4">
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
+          {Array.from({ length: 8 }, (_, i) => addDays(today, i)).map((day) => {
+            const sel = isSameDay(day, selectedDate)
+            const tod = isToday(day)
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => setSelectedDate(day)}
+                className={cn(
+                  "flex flex-col items-center flex-shrink-0 w-[62px] py-3 rounded-xl transition-all active:scale-95",
+                  sel ? "bg-primary text-on-primary shadow-md" : "bg-surface-container-low text-primary"
+                )}
+              >
+                <span className={cn("text-[10px] font-bold uppercase tracking-wide", sel ? "text-on-primary/70" : "text-on-surface-variant")}>
+                  {tod ? "Today" : format(day, "EEE")}
+                </span>
+                <span className="text-2xl font-extrabold leading-tight">{format(day, "d")}</span>
+                <span className={cn("text-[10px]", sel ? "text-on-primary/60" : "text-on-surface-variant/60")}>
+                  {format(day, "MMM")}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10">
-      {/* ── Mini Calendar ── */}
-      <section className="lg:col-span-5">
+      {/* ── Mini Calendar (desktop only) ── */}
+      <section className="hidden lg:block lg:col-span-5">
         <div className="bg-white rounded-xl shadow-card p-6 lg:p-8">
           {/* Month nav */}
           <div className="flex justify-between items-center mb-6">
@@ -264,21 +293,6 @@ export function BookingCalendar({
             })}
           </div>
 
-          {/* Summary */}
-          <div className="mt-6 pt-6 border-t border-outline-variant/20 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-on-surface-variant">Selected</span>
-              <span className="text-sm font-bold text-primary">
-                {isTodaySelected ? "Today" : format(selectedDate, "EEEE, MMM d")}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-on-surface-variant">Facility</span>
-              <span className="text-sm font-bold text-primary">
-                {facilityType === FacilityType.GYM ? "Gym & Fitness" : "Private Sauna"}
-              </span>
-            </div>
-          </div>
         </div>
       </section>
 
@@ -441,6 +455,7 @@ export function BookingCalendar({
           onBookingSuccess={fetchForDate}
         />
       )}
+    </div>
     </div>
   )
 }

@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { format, formatDistanceToNow } from "date-fns"
 
-interface QueueEntry {
+interface WaitlistEntry {
   id: string
   facilityType: string
   bookingType: string
@@ -23,28 +23,28 @@ interface QueueEntry {
   createdAt: Date
 }
 
-export default function QueuePage() {
+export default function WaitlistPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [queues, setQueues] = useState<{ active: QueueEntry[] }>({ active: [] })
+  const [queues, setWaitlists] = useState<{ active: WaitlistEntry[] }>({ active: [] })
   const [loading, setLoading] = useState(true)
   const [actioningId, setActioningId] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === "authenticated") {
-      fetchQueues()
+      fetchWaitlists()
       // Poll every 30 seconds to check for updates
-      const interval = setInterval(fetchQueues, 30000)
+      const interval = setInterval(fetchWaitlists, 30000)
       return () => clearInterval(interval)
     }
   }, [status])
 
-  const fetchQueues = async () => {
+  const fetchWaitlists = async () => {
     try {
       const response = await fetch("/api/queue/my-queues")
       if (response.ok) {
         const data = await response.json()
-        setQueues(data)
+        setWaitlists(data)
       }
     } catch (error) {
       console.error("Failed to fetch queues:", error)
@@ -65,7 +65,7 @@ export default function QueuePage() {
 
       if (response.ok) {
         alert("Booking claimed successfully!")
-        fetchQueues()
+        fetchWaitlists()
         router.push("/my-bookings")
       } else {
         alert(data.error || "Failed to claim slot")
@@ -90,7 +90,7 @@ export default function QueuePage() {
       })
 
       if (response.ok) {
-        fetchQueues()
+        fetchWaitlists()
         router.refresh()
       } else {
         const data = await response.json()
@@ -115,7 +115,7 @@ export default function QueuePage() {
     redirect("/login")
   }
 
-  const QueueCard = ({ queue }: { queue: QueueEntry }) => {
+  const WaitlistCard = ({ queue }: { queue: WaitlistEntry }) => {
     const isNotified = !!queue.notifiedAt
     const isExpiringSoon = queue.expiresAt && new Date(queue.expiresAt) < new Date(Date.now() + 10 * 60 * 1000) // 10 min
     const hasExpired = queue.expiresAt && new Date(queue.expiresAt) < new Date()
@@ -161,7 +161,7 @@ export default function QueuePage() {
               <span className="font-medium">#{queue.position}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">In queue since:</span>
+              <span className="text-gray-600">On waitlist since:</span>
               <span className="text-sm text-gray-500">
                 {formatDistanceToNow(new Date(queue.createdAt), { addSuffix: true })}
               </span>
@@ -208,7 +208,7 @@ export default function QueuePage() {
                 disabled={actioningId === queue.id}
                 className="flex-1"
               >
-                {actioningId === queue.id ? "Leaving..." : "Leave Queue"}
+                {actioningId === queue.id ? "Leaving..." : "Leave Waitlist"}
               </Button>
             )}
           </div>
@@ -222,8 +222,8 @@ export default function QueuePage() {
       <Navbar />
       <main className="max-w-4xl mx-auto px-4 sm:px-6 pt-20 pb-28">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">Queue</h1>
-          <Button variant="outline" size="sm" onClick={fetchQueues}>
+          <h1 className="text-3xl font-bold">Waitlist</h1>
+          <Button variant="outline" size="sm" onClick={fetchWaitlists}>
             Refresh
           </Button>
         </div>
@@ -231,23 +231,23 @@ export default function QueuePage() {
         {queues.active.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-gray-500">
-              You're not in any queues. Join a queue from the calendar when a slot is full!
+              You're not on any waitlists. Join a waitlist from the calendar when a slot is full!
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
-            {queues.active.map(queue => (
-              <QueueCard key={queue.id} queue={queue} />
+            {queues.active.map(entry => (
+              <WaitlistCard key={entry.id} queue={entry} />
             ))}
           </div>
         )}
 
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
           <p className="text-sm text-blue-900">
-            <strong>How the queue works:</strong>
+            <strong>How the waitlist works:</strong>
           </p>
           <ul className="text-sm text-blue-800 mt-2 space-y-1 list-disc list-inside">
-            <li>When someone cancels, the first person in queue gets notified</li>
+            <li>When someone cancels, the first person on the waitlist gets notified</li>
             <li>You have 30 minutes to claim the slot</li>
             <li>If you don't claim it, the next person gets notified</li>
             <li>This page auto-refreshes every 30 seconds</li>

@@ -357,7 +357,7 @@ export function BookingCalendar({
               const status = getSlotStatus(slot)
               const text = getStatusText(slot, status)
               const period = getPeriod(time)
-              const isClickable = !["blocked", "unavailable"].includes(status)
+              const isClickable = status !== "blocked"
 
               return (
                 <button
@@ -372,8 +372,10 @@ export function BookingCalendar({
                       ? "bg-secondary-container border border-secondary/20 hover:ring-2 hover:ring-secondary/30"
                       : status === "full"
                       ? "bg-surface-container-low border border-outline-variant/30 hover:ring-2 hover:ring-error/20"
-                      : status === "blocked" || status === "unavailable"
+                      : status === "blocked"
                       ? "bg-surface-container-low opacity-50 cursor-not-allowed"
+                      : status === "unavailable"
+                      ? "bg-surface-container-low border border-amber-200/50 hover:ring-2 hover:ring-amber-400/40 cursor-pointer"
                       : "bg-white border border-outline-variant/30 hover:ring-2 hover:ring-secondary/30 shadow-sm active:scale-95"
                   )}
                 >

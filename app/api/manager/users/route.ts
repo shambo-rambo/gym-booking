@@ -21,19 +21,35 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
+    const userSelect = {
+      id: true,
+      email: true,
+      name: true,
+      apartmentNumber: true,
+      phoneNumber: true,
+      role: true,
+      status: true,
+      notificationPreference: true,
+      createdAt: true,
+      updatedAt: true,
+    }
+
     // Get all users grouped by status
     const pending = await prisma.user.findMany({
       where: { status: "PENDING" },
+      select: userSelect,
       orderBy: { createdAt: 'desc' }
     })
 
     const verified = await prisma.user.findMany({
       where: { status: "VERIFIED" },
+      select: userSelect,
       orderBy: { name: 'asc' }
     })
 
     const deactivated = await prisma.user.findMany({
       where: { status: "DEACTIVATED" },
+      select: userSelect,
       orderBy: { updatedAt: 'desc' }
     })
 

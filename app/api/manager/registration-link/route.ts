@@ -1,12 +1,20 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const session = await auth()
-  if (!session?.user || (session.user as any).role !== "MANAGER") {
+  if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
+  const manager = await prisma.user.findUnique({
+    where: { id: (session.user as any).id }
+  })
+  if (!manager || manager.role !== "MANAGER") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
   const code = process.env.BUILDING_CODE

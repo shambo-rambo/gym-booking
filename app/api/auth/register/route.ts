@@ -19,6 +19,15 @@ const registerSchema = z.object({
   notificationPreference: z.enum(["EMAIL_ONLY", "SMS_ONLY", "BOTH"]),
 })
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -108,8 +117,8 @@ export async function POST(request: NextRequest) {
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #4F46E5;">New registration pending approval</h2>
                 <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 5px 0;"><strong>Name:</strong> ${user.name}</p>
-                  <p style="margin: 5px 0;"><strong>Email:</strong> ${user.email}</p>
+                  <p style="margin: 5px 0;"><strong>Name:</strong> ${escapeHtml(user.name)}</p>
+                  <p style="margin: 5px 0;"><strong>Email:</strong> ${escapeHtml(user.email)}</p>
                   <p style="margin: 5px 0;"><strong>Unit:</strong> ${user.apartmentNumber}</p>
                 </div>
                 <a href="${appUrl}/manager/users" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">Review in Manager Dashboard</a>

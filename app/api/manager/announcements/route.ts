@@ -8,6 +8,15 @@ export const dynamic = 'force-dynamic'
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 const createAnnouncementSchema = z.object({
   title: z.string().min(1),
   message: z.string().min(1),
@@ -105,9 +114,9 @@ export async function POST(request: NextRequest) {
             subject: `Announcement: ${announcement.title}`,
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #4F46E5;">${announcement.title}</h2>
+                <h2 style="color: #4F46E5;">${escapeHtml(announcement.title)}</h2>
                 <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="white-space: pre-wrap; margin: 0;">${announcement.message}</p>
+                  <p style="white-space: pre-wrap; margin: 0;">${escapeHtml(announcement.message)}</p>
                 </div>
                 ${announcement.expiresAt ? `<p style="color: #6b7280; font-size: 14px;">This announcement expires on ${new Date(announcement.expiresAt).toLocaleDateString()}.</p>` : ""}
                 <a href="${appUrl}" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">Go to Booking App</a>

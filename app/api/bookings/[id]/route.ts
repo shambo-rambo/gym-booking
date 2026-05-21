@@ -43,13 +43,17 @@ export async function DELETE(
       )
     }
 
-    // Check timing - allow cancellation up to 5 minutes before
+    // Block cancellation within 30 minutes of start (or after it's started)
     const bookingStartTime = parseSlotDateTime(booking.date, booking.startTime)
     const now = new Date()
     const minutesUntilStart = (bookingStartTime.getTime() - now.getTime()) / (1000 * 60)
 
-    // Allow cancellation even if less than 5 minutes (per requirements)
-    // The 5-minute rule is a minimum notice, not a restriction
+    if (minutesUntilStart <= 30) {
+      return NextResponse.json(
+        { error: "Bookings cannot be cancelled within 30 minutes of the start time." },
+        { status: 400 }
+      )
+    }
 
     // Delete the booking
     await prisma.booking.delete({

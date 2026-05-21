@@ -25,6 +25,10 @@ If any rule is triggered, the slot shows as **"Limit reached"** — but you can 
 - Equipment: Weights Machine, Free Dumbbells, Treadmill, Rowing Machine, Exercise Bike
 - If you need more than 3 pieces, book a **Private Gym** session instead
 
+## Cancellations
+- Bookings can be cancelled any time up to **30 minutes before** the start time
+- Cancellations are not allowed within 30 minutes of start, or once the session has begun
+
 ## Exclusive (Private) Bookings
 - Blocks the entire facility for the duration — no one else can book that slot
 - Blocked if any shared bookings already exist in the overlapping time window

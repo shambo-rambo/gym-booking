@@ -86,6 +86,14 @@ export function BookingDialog({
   const isSharedGym = facilityType === FacilityType.GYM && selectedBookingType === BookingType.SHARED
   const needsEquipment = isSharedGym && selectedEquipment.length === 0
 
+  const minutesUntilBooking = (() => {
+    const [h, m] = startTime.split(":").map(Number)
+    const start = new Date(date)
+    start.setHours(h, m, 0, 0)
+    return (start.getTime() - Date.now()) / (1000 * 60)
+  })()
+  const canCancel = minutesUntilBooking > 30
+
   const handleCancelBooking = async () => {
     if (!existingUserBooking) return
     if (!confirm("Cancel this booking?")) return
@@ -270,10 +278,15 @@ export function BookingDialog({
                 )}
               </div>
             </div>
+            {!canCancel && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
+                Cancellations are not allowed within 30 minutes of the start time.
+              </div>
+            )}
             {error && <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{error}</div>}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={onClose}>Close</Button>
-              <Button variant="destructive" onClick={handleCancelBooking} disabled={loading}>
+              <Button variant="destructive" onClick={handleCancelBooking} disabled={loading || !canCancel}>
                 {loading ? "Cancelling…" : "Cancel Booking"}
               </Button>
             </div>

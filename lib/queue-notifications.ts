@@ -2,6 +2,7 @@ import { prisma } from "./prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { sendNotification } from "./notifications"
 import { format } from "date-fns"
+import { isSlotAvailable } from "./booking-rules"
 
 /**
  * Notify the next person in queue when a slot becomes available
@@ -99,4 +100,65 @@ export async function expireUnclaimedQueueSlots() {
   }
 
   return expiredEntries.length
+}
+
+/**
+ * 3-hour rule: if a slot is still available 3 hours before it starts and
+ * someone is in the waitlist queue for it, notify the first person so they
+ * can claim it. Runs once per hour via cron.
+ */
+export async function releaseWaitlistedSlots() {
+  const now = new Date()
+
+  // Target slots starting in 2.5–3.5 hours (catches the hourly cron firing)
+  const windowStart = new Date(now.getTime() + 2.5 * 60 * 60 * 1000)
+  const windowEnd = new Date(now.getTime() + 3.5 * 60 * 60 * 1000)
+
+  // Find unnotified queue entries — we'll filter by slot time in code
+  const pendingEntries = await prisma.queueEntry.findMany({
+    where: { notifiedAt: null },
+    orderBy: { position: 'asc' },
+  })
+
+  // Deduplicate to one notification per unique slot
+  const notified = new Set<string>()
+  let releasedCount = 0
+
+  for (const entry of pendingEntries) {
+    const slotKey = `${entry.facilityType}|${entry.bookingType}|${entry.equipmentType ?? ''}|${entry.date.toISOString()}|${entry.startTime}|${entry.duration}`
+    if (notified.has(slotKey)) continue
+
+    // Reconstruct slot datetime (matches how validateBookingTime works)
+    const [h, m] = entry.startTime.split(':').map(Number)
+    const slotDateTime = new Date(entry.date)
+    slotDateTime.setHours(h, m, 0, 0)
+
+    if (slotDateTime < windowStart || slotDateTime > windowEnd) continue
+
+    // Only release if the slot is still genuinely available
+    const availability = await isSlotAvailable(
+      entry.facilityType,
+      entry.bookingType,
+      entry.equipmentType,
+      entry.date,
+      entry.startTime,
+      entry.duration
+    )
+
+    if (!availability.allowed) continue
+
+    notified.add(slotKey)
+    await notifyNextInQueue(
+      entry.facilityType,
+      entry.bookingType,
+      entry.equipmentType,
+      entry.date,
+      entry.startTime,
+      entry.duration
+    )
+    releasedCount++
+    console.log(`[3hr release] Notified queue for ${entry.facilityType} ${entry.date.toISOString()} ${entry.startTime}`)
+  }
+
+  return releasedCount
 }

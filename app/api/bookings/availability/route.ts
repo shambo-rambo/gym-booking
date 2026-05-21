@@ -197,6 +197,7 @@ export async function GET(request: NextRequest) {
         const sharedAvailability: Record<string, string> = {}
 
         if (facilityType === FacilityType.GYM) {
+          const gymFull = !hasExclusiveBooking && slotBookings.length >= 2
           for (const equipment of [
             EquipmentType.WEIGHTS_MACHINE,
             EquipmentType.FREE_DUMBBELLS,
@@ -208,6 +209,8 @@ export async function GET(request: NextRequest) {
               sharedAvailability[equipment] = "blocked"
             } else if (hasExclusiveBooking) {
               sharedAvailability[equipment] = "booked"
+            } else if (gymFull) {
+              sharedAvailability[equipment] = "full"
             } else if (slotBookings.some((b) => b.equipmentType === equipment)) {
               sharedAvailability[equipment] = "booked"
             } else if (antiHoardingBlocked) {

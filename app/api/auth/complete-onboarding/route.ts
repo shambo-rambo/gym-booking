@@ -48,9 +48,9 @@ export async function POST(request: NextRequest) {
     const apartmentUserCount = await prisma.user.count({
       where: { apartmentNumber: validated.apartmentNumber, status: "VERIFIED" },
     })
-    if (apartmentUserCount >= 4) {
+    if (apartmentUserCount >= 6) {
       return NextResponse.json(
-        { error: "That unit already has 4 registered residents. Please contact management." },
+        { error: "That unit already has 6 registered residents. Please contact management." },
         { status: 400 }
       )
     }

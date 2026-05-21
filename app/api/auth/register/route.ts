@@ -49,9 +49,9 @@ export async function POST(request: NextRequest) {
         status: "VERIFIED",
       },
     })
-    if (apartmentUserCount >= 4) {
+    if (apartmentUserCount >= 6) {
       return NextResponse.json(
-        { success: false, message: "That unit already has 4 registered residents. Please contact management." },
+        { success: false, message: "That unit already has 6 registered residents. Please contact management." },
         { status: 400 }
       )
     }

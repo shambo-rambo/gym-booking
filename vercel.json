@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/expire-queue-claims",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/release-waitlisted-slots",
+      "schedule": "0 * * * *"
     }
   ]
 }

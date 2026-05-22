@@ -273,7 +273,10 @@ export function DayView({
                         const sharedEntries: [string, string][] = d.shared ? Object.entries(d.shared) : []
                         const hasAvailableShared = sharedEntries.some(([, v]) => v === 'available')
                         const bookedSharedEquip = sharedEntries.filter(([, v]) => v === 'booked').map(([k]) => k)
-                        const isPartialShared = d.exclusive?.status === 'booked' && hasAvailableShared && d.bookedCount > 0
+                        // Use bookedSharedEquip.length rather than bookedCount: for overlapping
+                        // durations (e.g. 60-min row when only a 30-min booking exists) bookedCount
+                        // is 0, but the shared equipment map still shows "booked" entries.
+                        const isPartialShared = d.exclusive?.status === 'booked' && hasAvailableShared && bookedSharedEquip.length > 0
 
                         const equipNames: Record<string, string> = {
                           WEIGHTS_MACHINE: 'Weights',

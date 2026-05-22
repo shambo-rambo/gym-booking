@@ -376,25 +376,35 @@ export function BookingDialog({
                     Select up to {MAX_EQUIPMENT} items — other residents can see what's free
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {EQUIPMENT_LIST.map(([value, label]) => {
-                      const status = slot?.shared?.[value]
-                      const taken = status === "booked" || status === "blocked" || status === "full"
-                      const active = selectedEquipment.includes(value)
-                      const atLimit = selectedEquipment.length >= MAX_EQUIPMENT && !active
-                      return (
-                        <Button
-                          key={value}
-                          type="button"
-                          variant={active ? "default" : "outline"}
-                          onClick={() => !taken && toggleEquipment(value)}
-                          disabled={taken || atLimit}
-                          className="h-12 text-sm justify-start"
-                        >
-                          {label}
-                          {taken && <span className="ml-auto text-xs opacity-60">Taken</span>}
-                        </Button>
-                      )
-                    })}
+                    {(() => {
+                      const sharedValues = Object.values(slot?.shared ?? {})
+                      const isPartialSlot = sharedValues.some(s => s === "booked") && sharedValues.some(s => s === "available")
+                      return EQUIPMENT_LIST.map(([value, label]) => {
+                        const status = slot?.shared?.[value]
+                        const taken = status === "booked" || status === "blocked" || status === "full"
+                        const active = selectedEquipment.includes(value)
+                        const atLimit = selectedEquipment.length >= MAX_EQUIPMENT && !active
+                        return (
+                          <Button
+                            key={value}
+                            type="button"
+                            variant={active ? "default" : "outline"}
+                            onClick={() => !taken && toggleEquipment(value)}
+                            disabled={taken || atLimit}
+                            className={cn(
+                              "h-12 text-sm justify-start",
+                              !taken && !active && isPartialSlot && "border-yellow-400 bg-yellow-50 hover:bg-yellow-100 text-yellow-900"
+                            )}
+                          >
+                            {label}
+                            {taken && <span className="ml-auto text-xs opacity-60">Taken</span>}
+                            {!taken && !active && isPartialSlot && (
+                              <span className="ml-auto text-xs text-yellow-700 font-medium">Share</span>
+                            )}
+                          </Button>
+                        )
+                      })
+                    })()}
                   </div>
                   {selectedEquipment.length >= MAX_EQUIPMENT && (
                     <p className="text-xs text-amber-600">

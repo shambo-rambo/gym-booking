@@ -53,12 +53,15 @@ export function TimeSlot({
   const isBlocked = availability.durations.some((d: any) => d.exclusive?.status === "blocked")
 
   // Check if ALL durations are fully booked
-  // Only show as red/full if there's no way to book any duration
+  // Only show as red/full if there's no way to book any duration.
+  // Do NOT use exclusive.status === "booked" here — the API sets that whenever
+  // any booking exists (shared or exclusive), so 1 shared booking would falsely
+  // appear full. Use bookedCount >= 2 (two people in) or allSharedBooked instead.
   const isFullyBooked = availability.durations.every((d: any) => {
     const allSharedBooked = d.shared && Object.values(d.shared).every(
       (status: any) => status === "booked" || status === "full"
     )
-    return d.exclusive?.status === "booked" || d.bookedCount >= 2 || allSharedBooked
+    return d.bookedCount >= 2 || allSharedBooked
   })
 
   // Check if partially booked

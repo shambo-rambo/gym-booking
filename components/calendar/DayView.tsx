@@ -41,11 +41,12 @@ export function DayView({
     }
   }, [currentDate, facilityType])
 
-  const fetchDayAvailability = useCallback(async (date: Date) => {
+  const fetchDayAvailability = useCallback(async (date: Date, noCache?: boolean) => {
     const dateStr = format(date, "yyyy-MM-dd")
     try {
       const response = await fetch(
-        `/api/bookings/availability?facilityType=${facilityType}&date=${dateStr}`
+        `/api/bookings/availability?facilityType=${facilityType}&date=${dateStr}`,
+        noCache ? { cache: "no-store" } : undefined
       )
       if (response.ok) {
         return { dateStr, data: await response.json() }
@@ -55,6 +56,12 @@ export function DayView({
     }
     return null
   }, [facilityType])
+
+  // Post-action refresh: bypasses HTTP cache, only updates the current date.
+  const handleBookingSuccess = useCallback(async () => {
+    const result = await fetchDayAvailability(currentDate, true)
+    if (result) setAvailabilityData((old) => ({ ...old, [result.dateStr]: result.data }))
+  }, [currentDate, fetchDayAvailability])
 
   const fetchAndPrefetchAvailability = useCallback(async () => {
     // Show loading only if we haven't loaded data yet
@@ -352,7 +359,7 @@ export function DayView({
           date={selectedSlot.date}
           startTime={selectedSlot.startTime}
           availability={selectedSlot.availability}
-          onBookingSuccess={fetchAndPrefetchAvailability}
+          onBookingSuccess={handleBookingSuccess}
         />
       )}
     </div>

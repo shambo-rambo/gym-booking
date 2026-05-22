@@ -136,11 +136,12 @@ export function BookingCalendar({
   }, [viewMonth])
 
   const fetchDay = useCallback(
-    async (date: Date) => {
+    async (date: Date, noCache?: boolean) => {
       const dateStr = format(date, "yyyy-MM-dd")
       try {
         const res = await fetch(
-          `/api/bookings/availability?facilityType=${facilityType}&date=${dateStr}`
+          `/api/bookings/availability?facilityType=${facilityType}&date=${dateStr}`,
+          noCache ? { cache: "no-store" } : undefined
         )
         if (res.ok) return { dateStr, data: await res.json() as DayAvailability }
       } catch (err) {
@@ -150,6 +151,13 @@ export function BookingCalendar({
     },
     [facilityType]
   )
+
+  // Called after a booking/cancel action — bypasses HTTP cache so the slot
+  // updates immediately instead of serving up to 40s of stale data.
+  const handleBookingSuccess = useCallback(async () => {
+    const cur = await fetchDay(selectedDate, true)
+    if (cur) setAvailabilityData((old) => ({ ...old, [cur.dateStr]: cur.data }))
+  }, [selectedDate, fetchDay])
 
   const fetchForDate = useCallback(async () => {
     setLoading(true)
@@ -487,7 +495,7 @@ export function BookingCalendar({
           availability={selectedSlot.availability}
           defaultBookingType={defaultBookingType}
           defaultEquipment={defaultEquipment}
-          onBookingSuccess={fetchForDate}
+          onBookingSuccess={handleBookingSuccess}
         />
       )}
     </div>

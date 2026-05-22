@@ -56,13 +56,17 @@ export function BookingDialog({
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
 
+  // Reset state only when the dialog opens — NOT on every prop change.
+  // defaultEquipment defaults to [] in the parent, creating a new array reference
+  // on every render. Watching it directly causes equipment to reset mid-session.
   useEffect(() => {
-    setSelectedBookingType(defaultBookingType)
-  }, [defaultBookingType])
-
-  useEffect(() => {
-    setSelectedEquipment(defaultEquipment)
-  }, [defaultEquipment])
+    if (open) {
+      setSelectedBookingType(defaultBookingType)
+      setSelectedEquipment(defaultEquipment)
+      setError("")
+      setSuccess("")
+    }
+  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (error && error.includes("booked this timeslot yesterday")) setError("")

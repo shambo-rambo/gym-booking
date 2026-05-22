@@ -145,8 +145,12 @@ export async function POST(request: NextRequest) {
         } else if (facilityType === FacilityType.SAUNA) {
           if (overlapping.length >= 2) throw new Error("Sauna is full (2 people max).")
         } else {
-          const distinctUsers = new Set(overlapping.map(b => b.userId)).size
-          if (distinctUsers >= 2) throw new Error("Gym is full (2 people max).")
+          const distinctExistingUsers = new Set(overlapping.map(b => b.userId))
+          // Only block if this user is a *new* person and the slot already has 2 people.
+          // Allowing the same user to create multiple equipment bookings must not count as extra people.
+          if (!distinctExistingUsers.has(userId) && distinctExistingUsers.size >= 2) {
+            throw new Error("Gym is full (2 people max).")
+          }
         }
 
         // Create the booking

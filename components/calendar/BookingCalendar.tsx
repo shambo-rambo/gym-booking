@@ -50,7 +50,11 @@ function getSlotStatus(slot: SlotAvailability | undefined): DisplayStatus {
     (d) => d.exclusive?.status === "unavailable"
   )
   if (allUnavailable) return "unavailable"
+  // Only "partial" when a booking actually starts at this slot (bookedCount > 0).
+  // An overlapping booking from a later start time bleeds "booked" equipment into
+  // the longer duration without anyone having booked this slot directly.
   const isPartial = slot.durations.some((d) => {
+    if (d.bookedCount === 0) return false
     const vals = d.shared ? Object.values(d.shared) : []
     return vals.some((s) => s === "booked") && vals.some((s) => s === "available")
   })

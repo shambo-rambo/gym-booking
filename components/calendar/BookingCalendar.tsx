@@ -43,13 +43,18 @@ function getSlotStatus(slot: SlotAvailability | undefined): DisplayStatus {
     const sharedFull =
       d.shared &&
       Object.values(d.shared).every((s) => s === "booked" || s === "full")
-    return d.exclusive?.status === "booked" || d.bookedCount >= 2 || sharedFull
+    return d.bookedCount >= 2 || sharedFull
   })
   if (allFull) return "full"
   const allUnavailable = slot.durations.every(
     (d) => d.exclusive?.status === "unavailable"
   )
   if (allUnavailable) return "unavailable"
+  const isPartial = slot.durations.some((d) => {
+    const vals = d.shared ? Object.values(d.shared) : []
+    return vals.some((s) => s === "booked") && vals.some((s) => s === "available")
+  })
+  if (isPartial) return "partial"
   return "available"
 }
 
@@ -67,6 +72,7 @@ function getStatusText(slot: SlotAvailability | undefined, status: DisplayStatus
         ? `Queue #${d.userQueueEntry.position}`
         : "In queue"
     }
+    case "partial": return "Share available"
     case "full": {
       const maxQueue = Math.max(
         slot?.durations?.[0]?.queueCount ?? 0,
@@ -384,6 +390,8 @@ export function BookingCalendar({
                       ? "bg-primary ring-4 ring-primary/10 shadow-card-lg"
                       : status === "queued"
                       ? "bg-secondary-container border border-secondary/20 hover:ring-2 hover:ring-secondary/30"
+                      : status === "partial"
+                      ? "bg-yellow-50 border border-yellow-300 hover:ring-2 hover:ring-yellow-400/40 shadow-sm active:scale-95"
                       : status === "full"
                       ? "bg-surface-container-low border border-outline-variant/30 hover:ring-2 hover:ring-error/20"
                       : status === "blocked"
@@ -400,6 +408,7 @@ export function BookingCalendar({
                       status === "yours"      ? "bg-white/50" :
                       status === "queued"     ? "bg-secondary" :
                       status === "full"       ? "bg-error/60" :
+                      status === "partial"    ? "bg-yellow-500" :
                       status === "available"  ? "bg-secondary" :
                       "bg-outline/40"
                     )}
@@ -418,6 +427,7 @@ export function BookingCalendar({
                       "block text-lg font-extrabold tracking-tight",
                       status === "yours"    ? "text-white" :
                       status === "queued"   ? "text-on-secondary-container" :
+                      status === "partial"  ? "text-yellow-800" :
                       ["full","blocked","unavailable"].includes(status)
                         ? "text-on-surface-variant"
                         : "text-primary"
@@ -428,8 +438,9 @@ export function BookingCalendar({
                   <span
                     className={cn(
                       "block text-[10px] mt-0.5",
-                      status === "yours"  ? "text-white/70" :
-                      status === "full"   ? "text-error/80" :
+                      status === "yours"    ? "text-white/70" :
+                      status === "partial"  ? "text-yellow-700" :
+                      status === "full"     ? "text-error/80" :
                       "text-on-surface-variant/70"
                     )}
                   >

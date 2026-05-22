@@ -2,7 +2,7 @@ import type { BookingType, EquipmentType } from "@prisma/client"
 
 export type SlotStatus = "available" | "booked" | "blocked" | "unavailable" | "full"
 
-export type DisplayStatus = "available" | "yours" | "queued" | "blocked" | "unavailable" | "full"
+export type DisplayStatus = "available" | "partial" | "yours" | "queued" | "blocked" | "unavailable" | "full"
 
 export interface UserBookingRef {
   id: string

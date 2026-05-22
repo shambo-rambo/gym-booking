@@ -10,6 +10,7 @@ import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { BookingDialog } from "./BookingDialog"
 import { cn } from "@/lib/utils"
 import type { DayAvailability, DisplayStatus, SlotAvailability } from "@/lib/types"
+import { EQUIPMENT_LABELS } from "@/lib/equipment"
 
 interface BookingCalendarProps {
   facilityType: FacilityType
@@ -71,8 +72,8 @@ function getStatusText(slot: SlotAvailability | undefined, status: DisplayStatus
     case "yours": {
       const d = slot?.durations?.find((d) => d.userBooking !== null)
       return d?.userBooking?.bookingType === "EXCLUSIVE"
-        ? "Your exclusive"
-        : "Your booking"
+        ? "Your booking · Private"
+        : "Your booking · Shared"
     }
     case "queued": {
       const d = slot?.durations?.find((d) => d.userQueueEntry !== null)
@@ -454,6 +455,21 @@ export function BookingCalendar({
                   >
                     {text}
                   </span>
+                  {status === "yours" && (() => {
+                    const d = slot?.durations?.find((d) => d.userBooking !== null)
+                    if (!d || d.userBooking?.bookingType !== "SHARED") return null
+                    const myEquip = d.userBooking.equipmentType as EquipmentType | null
+                    const allBooked = d.shared
+                      ? Object.entries(d.shared).filter(([, v]) => v === "booked").map(([k]) => k as EquipmentType)
+                      : []
+                    const othersEquip = allBooked.filter((k) => k !== myEquip)
+                    const parts: string[] = []
+                    if (myEquip) parts.push(EQUIPMENT_LABELS[myEquip])
+                    othersEquip.forEach((k) => parts.push(EQUIPMENT_LABELS[k]))
+                    return parts.length > 0
+                      ? <span className="block text-[9px] mt-0.5 text-white/50">{parts.join(" · ")}</span>
+                      : null
+                  })()}
                 </button>
               )
             })}

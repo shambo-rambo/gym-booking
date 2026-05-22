@@ -286,6 +286,28 @@ export function DayView({
                           EXERCISE_BIKE: 'Exercise bike',
                         }
 
+                        if (d.userBooking && !hasEarlierBooking) {
+                          const isShared = d.userBooking.bookingType === "SHARED"
+                          const myEquip = d.userBooking.equipmentType as EquipmentType | null
+                          const othersEquip = isShared
+                            ? bookedSharedEquip.filter((e) => e !== myEquip)
+                            : []
+                          return (
+                            <div key={d.duration} className="text-xs">
+                              <span className="font-medium text-gray-600">{d.duration} min:</span>{' '}
+                              <span className="font-semibold text-blue-600">
+                                Your booking · {isShared ? "Shared" : "Private"}
+                              </span>
+                              {isShared && myEquip && (
+                                <span className="text-gray-500"> · {equipNames[myEquip] || myEquip}</span>
+                              )}
+                              {isShared && othersEquip.length > 0 && (
+                                <span className="text-gray-500"> + {othersEquip.map(e => equipNames[e] || e).join(', ')} in use</span>
+                              )}
+                            </div>
+                          )
+                        }
+
                         return (
                           <div key={d.duration} className="text-xs text-gray-600">
                             <span className="font-medium">{d.duration} min:</span>{' '}
@@ -302,7 +324,6 @@ export function DayView({
                             {isPartialShared && facilityType === FacilityType.SAUNA && (
                               <span className="text-gray-500"> · {d.bookedCount}/2 in session</span>
                             )}
-                            {d.userBooking && !hasEarlierBooking && <span className="text-blue-600 font-semibold"> (Your booking)</span>}
                             {d.userQueueEntry && <span className="text-orange-600 font-semibold"> (In queue)</span>}
                           </div>
                         )

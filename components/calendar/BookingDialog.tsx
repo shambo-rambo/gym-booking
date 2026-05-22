@@ -132,6 +132,8 @@ export function BookingDialog({
     const equipmentItems: (EquipmentType | undefined)[] =
       isSharedGym ? selectedEquipment : [undefined]
 
+    const createdIds: string[] = []
+
     try {
       for (const equipment of equipmentItems) {
         const bookingData: BookingPayload = {
@@ -149,14 +151,27 @@ export function BookingDialog({
         })
         const data = await response.json()
         if (!response.ok) {
+          // Roll back any bookings already created in this batch
+          if (createdIds.length > 0) {
+            await Promise.allSettled(
+              createdIds.map(id => fetch(`/api/bookings/${id}`, { method: "DELETE" }))
+            )
+          }
           setError(data.error || "Failed to create booking")
           setLoading(false)
           return
         }
+        if (data.booking?.id) createdIds.push(data.booking.id)
       }
       onBookingSuccess?.()
       onClose()
     } catch {
+      // Roll back any bookings already created in this batch
+      if (createdIds.length > 0) {
+        await Promise.allSettled(
+          createdIds.map(id => fetch(`/api/bookings/${id}`, { method: "DELETE" }))
+        )
+      }
       setError("An error occurred. Please try again.")
       setLoading(false)
     }

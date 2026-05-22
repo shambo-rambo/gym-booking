@@ -145,7 +145,8 @@ export async function POST(request: NextRequest) {
         } else if (facilityType === FacilityType.SAUNA) {
           if (overlapping.length >= 2) throw new Error("Sauna is full (2 people max).")
         } else {
-          if (overlapping.length >= 2) throw new Error("Gym is full (2 people max).")
+          const distinctUsers = new Set(overlapping.map(b => b.userId)).size
+          if (distinctUsers >= 2) throw new Error("Gym is full (2 people max).")
           if (overlapping.some(b => b.equipmentType === (equipmentType as EquipmentType))) {
             throw new Error("This equipment is already booked.")
           }

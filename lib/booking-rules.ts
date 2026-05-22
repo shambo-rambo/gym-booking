@@ -168,8 +168,9 @@ export async function isSlotAvailable(
       return { allowed: false, reason: "Sauna is full (2 people max)." }
     }
   } else {
-    // Gym shared — max 2 people, plus per equipment type
-    if (overlapping.length >= 2) {
+    // Gym shared — max 2 distinct people, plus per equipment type
+    const distinctUsers = new Set(overlapping.map(b => b.userId)).size
+    if (distinctUsers >= 2) {
       return { allowed: false, reason: "Gym is full (2 people max)." }
     }
     const equipmentTaken = overlapping.some(b => b.equipmentType === equipmentType)

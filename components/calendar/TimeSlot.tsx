@@ -182,8 +182,8 @@ export function TimeSlot({
         </div>
       )}
       {!hasUserBooking && !hasUserQueueEntry && isPartiallyBooked && (
-        <div className="text-[10px] font-semibold text-gray-700">
-          {slot30?.bookedCount || slot60?.bookedCount || 0}/2
+        <div className="text-[10px] font-semibold text-yellow-700 leading-tight">
+          Shared
         </div>
       )}
       {!hasUserQueueEntry && (slot30?.queueCount > 0 || slot60?.queueCount > 0) && (

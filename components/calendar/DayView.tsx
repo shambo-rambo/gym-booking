@@ -270,13 +270,35 @@ export function DayView({
                           })
                         })
 
+                        const sharedEntries: [string, string][] = d.shared ? Object.entries(d.shared) : []
+                        const hasAvailableShared = sharedEntries.some(([, v]) => v === 'available')
+                        const bookedSharedEquip = sharedEntries.filter(([, v]) => v === 'booked').map(([k]) => k)
+                        const isPartialShared = d.exclusive?.status === 'booked' && hasAvailableShared && d.bookedCount > 0
+
+                        const equipNames: Record<string, string> = {
+                          WEIGHTS_MACHINE: 'Weights',
+                          FREE_DUMBBELLS: 'Dumbbells',
+                          TREADMILL: 'Treadmill',
+                          ROWING_MACHINE: 'Rowing machine',
+                          EXERCISE_BIKE: 'Exercise bike',
+                        }
+
                         return (
                           <div key={d.duration} className="text-xs text-gray-600">
                             <span className="font-medium">{d.duration} min:</span>{' '}
-                            {d.exclusive?.status === 'available' && 'Available'}
-                            {d.exclusive?.status === 'booked' && 'Booked'}
+                            {isPartialShared && (
+                              <span className="font-semibold text-yellow-700">Share available</span>
+                            )}
+                            {!isPartialShared && d.exclusive?.status === 'available' && 'Available'}
+                            {!isPartialShared && d.exclusive?.status === 'booked' && 'Full'}
                             {d.exclusive?.status === 'blocked' && 'Blocked'}
-                            {d.exclusive?.status === 'unavailable' && 'Unavailable'}
+                            {d.exclusive?.status === 'unavailable' && 'Limit reached'}
+                            {isPartialShared && bookedSharedEquip.length > 0 && (
+                              <span className="text-gray-500"> · {bookedSharedEquip.map(e => equipNames[e] || e).join(', ')} in use</span>
+                            )}
+                            {isPartialShared && facilityType === FacilityType.SAUNA && (
+                              <span className="text-gray-500"> · {d.bookedCount}/2 in session</span>
+                            )}
                             {d.userBooking && !hasEarlierBooking && <span className="text-blue-600 font-semibold"> (Your booking)</span>}
                             {d.userQueueEntry && <span className="text-orange-600 font-semibold"> (In queue)</span>}
                           </div>

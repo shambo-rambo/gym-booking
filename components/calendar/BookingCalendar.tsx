@@ -50,14 +50,18 @@ function getSlotStatus(slot: SlotAvailability | undefined): DisplayStatus {
     (d) => d.exclusive?.status === "unavailable"
   )
   if (allUnavailable) return "unavailable"
-  // Only "partial" when a booking actually starts at this slot (bookedCount > 0).
-  // An overlapping booking from a later start time bleeds "booked" equipment into
-  // the longer duration without anyone having booked this slot directly.
-  const isPartial = slot.durations.some((d) => {
-    if (d.bookedCount === 0) return false
-    const vals = d.shared ? Object.values(d.shared) : []
-    return vals.some((s) => s === "booked") && vals.some((s) => s === "available")
-  })
+  // Use the 30-min duration to decide "partial". Its exclusive.status === "booked"
+  // means there are actual overlapping bookings in that 30-min window (someone is
+  // genuinely in the gym at this start time). Checking only the 30-min avoids the
+  // false positive where a 07:00 booking bleeds into the 06:30 60-min window without
+  // anyone having booked the 06:30 slot itself.
+  const slot30 = slot.durations.find((d) => d.duration === 30)
+  const isPartial = !!slot30 &&
+    slot30.exclusive?.status === "booked" &&
+    (() => {
+      const vals = slot30.shared ? Object.values(slot30.shared) : []
+      return vals.some((s) => s === "booked") && vals.some((s) => s === "available")
+    })()
   if (isPartial) return "partial"
   return "available"
 }

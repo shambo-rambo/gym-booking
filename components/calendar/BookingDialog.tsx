@@ -378,8 +378,8 @@ export function BookingDialog({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {EQUIPMENT_LIST.map(([value, label]) => {
                       const status = slot?.shared?.[value]
-                      const sharedBooking = status === "booked"
-                      const taken = status === "booked" || status === "blocked" || status === "full"
+                      const sharedInUse = status === "booked"
+                      const taken = status === "blocked" || status === "full"
                       const active = selectedEquipment.includes(value)
                       const atLimit = selectedEquipment.length >= MAX_EQUIPMENT && !active
                       return (
@@ -391,12 +391,12 @@ export function BookingDialog({
                           disabled={taken || atLimit}
                           className={cn(
                             "h-12 text-sm justify-start",
-                            sharedBooking && "border-yellow-400 bg-yellow-50 text-yellow-900 opacity-100"
+                            sharedInUse && !active && "border-yellow-400 bg-yellow-50 hover:bg-yellow-100 text-yellow-900"
                           )}
                         >
                           {label}
-                          {sharedBooking && <span className="ml-auto text-xs text-yellow-700 font-semibold">Share</span>}
-                          {!sharedBooking && taken && <span className="ml-auto text-xs opacity-60">Taken</span>}
+                          {sharedInUse && !active && <span className="ml-auto text-xs text-yellow-700 font-semibold">Share</span>}
+                          {taken && <span className="ml-auto text-xs opacity-60">Taken</span>}
                         </Button>
                       )
                     })}

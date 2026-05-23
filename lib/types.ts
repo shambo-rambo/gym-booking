@@ -25,6 +25,7 @@ export interface DurationAvailability {
   }
   shared: Record<string, SlotStatus>
   userBooking: UserBookingRef | null
+  userBookings: UserBookingRef[]
   userQueueEntry: UserQueueEntryRef | null
   queueCount: number
   bookedCount: number

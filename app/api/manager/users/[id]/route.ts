@@ -58,7 +58,7 @@ export async function PATCH(
 
     // If verifying, send welcome notification
     if (validatedData.status === "VERIFIED" && user.status === "PENDING") {
-      await sendNotification(updatedUser, 'ACCOUNT_VERIFIED', {})
+      sendNotification(updatedUser, 'ACCOUNT_VERIFIED', {}).catch(err => console.error('[Users] Notification failed:', err))
     }
 
     // If deactivating, cancel all their bookings

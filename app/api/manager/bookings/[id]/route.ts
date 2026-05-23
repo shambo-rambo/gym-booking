@@ -54,12 +54,12 @@ export async function DELETE(
 
     // Notify user if requested
     if (validatedData.notifyUser) {
-      await sendNotification(booking.user, 'BOOKING_CANCELLED_BY_ADMIN', {
+      sendNotification(booking.user, 'BOOKING_CANCELLED_BY_ADMIN', {
         facilityType: booking.facilityType.toString(),
         date: format(booking.date, 'EEEE, MMMM d, yyyy'),
         startTime: booking.startTime,
         reason: validatedData.reason
-      })
+      }).catch(err => console.error('[Booking] Notification failed:', err))
     }
 
     // Check if anyone is queued for this slot and notify them

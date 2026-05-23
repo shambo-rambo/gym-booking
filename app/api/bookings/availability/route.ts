@@ -123,21 +123,21 @@ export async function GET(request: NextRequest) {
           return bookingStart < slotEndMinutes && bookingStart + b.duration > slotStartMinutes
         })
 
-        const userBookingStartsHere = existingBookings.find(
+        const userBookingsStartingHere = existingBookings.filter(
           (b) => b.userId === userId && b.startTime === startTime && b.duration === duration
-        ) ?? null
+        )
 
-        const userBookingExtendsHere =
-          userBookingStartsHere === null
-            ? existingBookings.find((b) => {
-                if (b.userId !== userId) return false
-                const [bh, bm] = b.startTime.split(":").map(Number)
-                const bookingStart = bh * 60 + bm
-                return bookingStart < slotStartMinutes && bookingStart + b.duration > slotStartMinutes
-              }) ?? null
-            : null
+        const userBookingsExtendingHere = userBookingsStartingHere.length === 0
+          ? existingBookings.filter((b) => {
+              if (b.userId !== userId) return false
+              const [bh, bm] = b.startTime.split(":").map(Number)
+              const bookingStart = bh * 60 + bm
+              return bookingStart < slotStartMinutes && bookingStart + b.duration > slotStartMinutes
+            })
+          : []
 
-        const userBooking = userBookingStartsHere ?? userBookingExtendsHere
+        const userBookingsList = [...userBookingsStartingHere, ...userBookingsExtendingHere]
+        const userBooking = userBookingsList[0] ?? null
 
         const queueCount = queueEntries.filter((q) => {
           if (q.startTime === startTime) return true
@@ -247,6 +247,11 @@ export async function GET(request: NextRequest) {
                 equipmentType: userBooking.equipmentType,
               }
             : null,
+          userBookings: userBookingsList.map((b) => ({
+            id: b.id,
+            bookingType: b.bookingType,
+            equipmentType: b.equipmentType,
+          })),
           userQueueEntry: userQueueEntry
             ? {
                 id: userQueueEntry.id,

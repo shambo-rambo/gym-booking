@@ -151,20 +151,12 @@ export function TimeSlot({
   slotDateTime.setHours(hour, minute, 0, 0)
   const isPast = slotDateTime < now
 
-  // Return empty cell for past slots
-  if (isPast) {
-    return (
-      <div className="p-1 border-l border-b h-12 bg-gray-50" />
-    )
-  }
-
   return (
     <button
       onClick={() => onSelect(availability)}
       className={cn(
         "p-1 border-l border-b h-12 text-xs flex flex-col items-center justify-center relative transition-colors cursor-pointer",
-        bgColor,
-        borderColor
+        isPast ? "bg-gray-100 border-gray-200 opacity-40 hover:opacity-60" : cn(bgColor, borderColor)
       )}
     >
       {hasUserBooking && (

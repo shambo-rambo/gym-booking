@@ -129,12 +129,12 @@ export async function POST(request: NextRequest) {
         })
 
         // Notify user
-        await sendNotification(booking.user, 'BOOKING_CANCELLED_BY_ADMIN', {
+        sendNotification(booking.user, 'BOOKING_CANCELLED_BY_ADMIN', {
           facilityType: booking.facilityType.toString(),
           date: format(booking.date, 'EEEE, MMMM d, yyyy'),
           startTime: booking.startTime,
           reason: `Facility blocked: ${validatedData.reason}`
-        })
+        }).catch(err => console.error('[BlockedSlots] Notification failed:', err))
       }
     }
 

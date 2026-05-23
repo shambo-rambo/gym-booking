@@ -142,14 +142,14 @@ export async function POST(
 
       // Send booking confirmation notification
       if (user) {
-        await sendNotification(user, 'BOOKING_CONFIRMATION', {
+        sendNotification(user, 'BOOKING_CONFIRMATION', {
           facilityType: result.facilityType.toString(),
           bookingType: result.bookingType.toString(),
           equipmentType: result.equipmentType?.toString(),
           date: format(result.date, 'EEEE, MMMM d, yyyy'),
           startTime: result.startTime,
           duration: result.duration
-        })
+        }).catch(err => console.error('[Queue] Notification failed:', err))
       }
 
       return NextResponse.json({

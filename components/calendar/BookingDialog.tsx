@@ -84,7 +84,20 @@ export function BookingDialog({
 
   const slot = availability?.durations?.find((d) => d.duration === selectedDuration)
   const totalQueueCount = availability?.durations?.reduce((sum, d) => sum + d.queueCount, 0) ?? 0
-  const existingUserBooking = availability?.durations?.find((d) => d.userBooking !== null)?.userBooking ?? null
+
+  // Collect all user bookings across all durations (deduped by id)
+  const existingUserBookings = (() => {
+    const seen = new Set<string>()
+    const all: NonNullable<SlotAvailability["durations"][number]["userBooking"]>[] = []
+    for (const d of availability?.durations ?? []) {
+      const bookings: typeof all = d.userBookings ?? (d.userBooking ? [d.userBooking] : [])
+      for (const b of bookings) {
+        if (!seen.has(b.id)) { seen.add(b.id); all.push(b) }
+      }
+    }
+    return all
+  })()
+  const existingUserBooking = existingUserBookings[0] ?? null
   const existingUserQueueEntry = availability?.durations?.find((d) => d.userQueueEntry !== null)?.userQueueEntry ?? null
 
   const isSharedGym = facilityType === FacilityType.GYM && selectedBookingType === BookingType.SHARED
@@ -99,14 +112,17 @@ export function BookingDialog({
   const canCancel = minutesUntilBooking > 30
 
   const handleCancelBooking = async () => {
-    if (!existingUserBooking) return
+    if (existingUserBookings.length === 0) return
     if (!confirm("Cancel this booking?")) return
     setLoading(true)
     setError("")
     try {
-      const response = await fetch(`/api/bookings/${existingUserBooking.id}`, { method: "DELETE" })
-      if (response.ok) { onBookingSuccess?.(); onClose() }
-      else setError((await response.json()).error || "Failed to cancel booking")
+      const results = await Promise.all(
+        existingUserBookings.map((b) => fetch(`/api/bookings/${b.id}`, { method: "DELETE" }))
+      )
+      const failed = results.find((r) => !r.ok)
+      if (failed) setError((await failed.json()).error || "Failed to cancel booking")
+      else { onBookingSuccess?.(); onClose() }
     } catch { setError("Failed to cancel booking") }
     finally { setLoading(false) }
   }
@@ -287,11 +303,14 @@ export function BookingDialog({
                     {availability?.durations?.find((d) => d.userBooking !== null)?.duration} minutes
                   </span>
                 </div>
-                {existingUserBooking.equipmentType && (
+                {existingUserBookings.some((b) => b.equipmentType) && (
                   <div className="flex justify-between">
                     <span className="text-gray-600">Equipment:</span>
-                    <span className="font-medium">
-                      {EQUIPMENT_LABELS[existingUserBooking.equipmentType]}
+                    <span className="font-medium text-right">
+                      {existingUserBookings
+                        .filter((b) => b.equipmentType)
+                        .map((b) => EQUIPMENT_LABELS[b.equipmentType!])
+                        .join(", ")}
                     </span>
                   </div>
                 )}

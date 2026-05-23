@@ -178,15 +178,15 @@ export async function POST(request: NextRequest) {
         timeout: 10000,
       })
 
-      // Send confirmation notification
-      await sendNotification(user, 'BOOKING_CONFIRMATION', {
+      // Fire-and-forget — don't block the response on email/SMS delivery
+      sendNotification(user, 'BOOKING_CONFIRMATION', {
         facilityType: booking.facilityType.toString(),
         bookingType: booking.bookingType.toString(),
         equipmentType: booking.equipmentType?.toString(),
         date: format(booking.date, 'EEEE, MMMM d, yyyy'),
         startTime: booking.startTime,
         duration: booking.duration
-      })
+      }).catch(err => console.error('[Booking] Notification failed:', err))
 
       return NextResponse.json({
         success: true,

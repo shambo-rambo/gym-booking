@@ -31,13 +31,12 @@ test("FLOW-07: manager approves a pending resident", async ({ page }) => {
   // Click the Pending tab
   await page.getByRole("tab", { name: /pending/i }).click()
 
-  // Find the pending user row and click Approve
-  const userRow = page
-    .locator(`tr, [role="row"], li, div`)
-    .filter({ hasText: pendingEmail })
-  await expect(userRow).toBeVisible({ timeout: 10_000 })
-  await userRow.getByRole("button", { name: /approve/i }).click()
+  // Scope to the Pending tabpanel to avoid strict-mode ambiguity
+  const tabpanel = page.getByRole("tabpanel", { name: /pending/i })
+  await expect(tabpanel).toBeVisible({ timeout: 10_000 })
+  await expect(tabpanel.getByText(pendingEmail)).toBeVisible({ timeout: 5_000 })
+  await tabpanel.getByRole("button", { name: /approve/i }).click()
 
   // User disappears from pending list
-  await expect(page.locator(`text=${pendingEmail}`)).not.toBeVisible({ timeout: 10_000 })
+  await expect(tabpanel.getByText(pendingEmail)).not.toBeVisible({ timeout: 10_000 })
 })

@@ -24,9 +24,11 @@ export async function clickFirstAvailableSlot(page: Page): Promise<void> {
 
   // Find the first enabled time-slot button. Available slots are non-disabled
   // buttons whose text content includes a HH:MM time string.
+  // NOTE: textContent is "EVENING17:30Available" with no spaces between spans,
+  // so \b word-boundary fails before digits preceded by a letter — use /\d{2}:\d{2}/.
   const slot = page
     .locator("button:not([disabled])")
-    .filter({ hasText: /\b\d{1,2}:\d{2}\b/ })
+    .filter({ hasText: /\d{2}:\d{2}/ })
     .first()
 
   await expect(slot).toBeVisible({ timeout: 10_000 })

@@ -61,7 +61,7 @@ test("FLOW-05: userB joins waitlist for slot booked by userA", async () => {
   // It should still be clickable so the dialog offers Join Waitlist.
   const targetSlot = slotTimeText
     ? pageB.locator("button").filter({ hasText: slotTimeText.trim() }).first()
-    : pageB.locator("button:not([disabled])").filter({ hasText: /\b\d{1,2}:\d{2}\b/ }).first()
+    : pageB.locator("button:not([disabled])").filter({ hasText: /\d{2}:\d{2}/ }).first()
 
   await expect(targetSlot).toBeVisible({ timeout: 10_000 })
   await targetSlot.click()

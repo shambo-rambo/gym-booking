@@ -65,7 +65,7 @@ test("FLOW-06: userB is notified and claims slot after userA cancels", async () 
 
   const targetSlot = slotTimeText
     ? pageB.locator("button").filter({ hasText: slotTimeText.trim() }).first()
-    : pageB.locator("button:not([disabled])").filter({ hasText: /\b\d{1,2}:\d{2}\b/ }).first()
+    : pageB.locator("button:not([disabled])").filter({ hasText: /\d{2}:\d{2}/ }).first()
 
   await expect(targetSlot).toBeVisible({ timeout: 10_000 })
   await targetSlot.click()

@@ -2,23 +2,30 @@ import { type Page, expect } from "@playwright/test"
 
 /**
  * Clicks the first available (not disabled) time-slot button in the
- * BookingCalendar, then returns the dialog locator.
+ * BookingCalendar, then returns.
  *
- * The calendar renders a grid of card-style buttons. Available slots are
- * enabled buttons whose visible text includes a HH:MM time string.
- * We wait for the loading skeleton to clear first.
+ * The calendar fetches availability from /api/bookings/availability.
+ * Until that response arrives, all slot buttons render as disabled
+ * (slot=undefined → disabled={!slot}=true) even though they show
+ * "Available" text. We wait for the API response first, then look for
+ * the first enabled button.
  */
 export async function clickFirstAvailableSlot(page: Page): Promise<void> {
-  // Wait for the loading skeleton to clear
-  await page.waitForFunction(
-    () => document.querySelectorAll(".animate-pulse").length === 0,
-    { timeout: 15_000 }
+  // Wait for the availability API to respond — this populates slot data
+  // and turns the relevant buttons from disabled → enabled.
+  await page.waitForResponse(
+    (resp) =>
+      resp.url().includes("/api/bookings/availability") && resp.status() === 200,
+    { timeout: 20_000 }
   )
 
-  // Find an enabled time-slot button. The BookingCalendar renders available
-  // slots as non-disabled buttons with a time label inside (e.g. "10:00").
+  // Brief tick to let React re-render with the new data
+  await page.waitForTimeout(300)
+
+  // Find the first enabled time-slot button. Available slots are non-disabled
+  // buttons whose text content includes a HH:MM time string.
   const slot = page
-    .locator('button:not([disabled])')
+    .locator("button:not([disabled])")
     .filter({ hasText: /\b\d{1,2}:\d{2}\b/ })
     .first()
 

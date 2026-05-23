@@ -40,6 +40,29 @@ export async function getQueueEntry(email: string) {
   return db.queueEntry.findFirst({ where: { userId: user.id } })
 }
 
+export async function createPendingUser(
+  email: string,
+  name: string,
+  apartmentNumber: number
+): Promise<void> {
+  const bcrypt = await import("bcryptjs")
+  const db = getDb()
+  const hashed = await bcrypt.hash("TestPass123!", 10)
+  await db.user.upsert({
+    where: { email },
+    update: { status: "PENDING" },
+    create: {
+      email,
+      name,
+      password: hashed,
+      apartmentNumber,
+      role: "RESIDENT",
+      status: "PENDING",
+      notificationPreference: "EMAIL_ONLY",
+    },
+  })
+}
+
 export async function markQueueEntryNotified(email: string): Promise<void> {
   const db = getDb()
   const user = await db.user.findUnique({ where: { email } })

@@ -9,3 +9,12 @@ export const EQUIPMENT_LABELS: Record<EquipmentType, string> = {
 }
 
 export const EQUIPMENT_LIST = Object.entries(EQUIPMENT_LABELS) as [EquipmentType, string][]
+
+const BOOKING_TYPE_LABELS: Record<string, string> = {
+  EXCLUSIVE: "Private",
+  SHARED: "Shared",
+}
+
+export function formatBookingType(type: string): string {
+  return BOOKING_TYPE_LABELS[type] ?? type
+}

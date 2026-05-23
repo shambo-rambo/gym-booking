@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { z } from "zod"
+import bcrypt from "bcryptjs"
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,8 @@ const updateSettingsSchema = z.object({
 
 const updateProfileSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
-  email: z.string().email("Invalid email address")
+  email: z.string().email("Invalid email address"),
+  currentPassword: z.string().optional()
 })
 
 export async function GET(request: NextRequest) {
@@ -62,6 +64,36 @@ export async function PUT(request: NextRequest) {
     const userId = (session.user as any).id
     const body = await request.json()
     const validatedData = updateProfileSchema.parse(body)
+
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, password: true }
+    })
+
+    if (!currentUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    const emailChanged = validatedData.email !== currentUser.email
+    if (emailChanged) {
+      if (currentUser.password) {
+        if (!validatedData.currentPassword) {
+          return NextResponse.json(
+            { error: "Current password is required to change your email address" },
+            { status: 400 }
+          )
+        }
+        const passwordMatch = await bcrypt.compare(validatedData.currentPassword, currentUser.password)
+        if (!passwordMatch) {
+          return NextResponse.json({ error: "Incorrect password" }, { status: 403 })
+        }
+      } else {
+        return NextResponse.json(
+          { error: "Email cannot be changed for accounts linked via Google" },
+          { status: 400 }
+        )
+      }
+    }
 
     const existing = await prisma.user.findFirst({
       where: { email: validatedData.email, NOT: { id: userId } }

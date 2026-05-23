@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import LoadingSpinner from "@/components/LoadingSpinner"
 
 interface UserSettings {
   email: string
@@ -30,6 +32,7 @@ export default function SettingsPage() {
   const [phoneNumber, setPhoneNumber] = useState("")
   const [name, setName] = useState("")
   const [email, setEmail] = useState("")
+  const [currentPassword, setCurrentPassword] = useState("")
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState("")
   const [profileSuccess, setProfileSuccess] = useState("")
@@ -66,7 +69,7 @@ export default function SettingsPage() {
       const response = await fetch("/api/user/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email })
+        body: JSON.stringify({ name, email, currentPassword: currentPassword || undefined })
       })
       const data = await response.json()
       if (!response.ok) {
@@ -118,11 +121,7 @@ export default function SettingsPage() {
   }
 
   if (status === "loading" || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Loading...</p>
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
   if (!session) {
@@ -162,6 +161,18 @@ export default function SettingsPage() {
                   placeholder="your@email.com"
                 />
               </div>
+              {email !== settings?.email && (
+                <div className="space-y-2">
+                  <Label htmlFor="currentPassword">Current password (required to change email)</Label>
+                  <Input
+                    id="currentPassword"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter your current password"
+                  />
+                </div>
+              )}
               <div className="space-y-1">
                 <Label>Apartment Number</Label>
                 <p className="text-sm text-gray-600">#{settings?.apartmentNumber}</p>
@@ -187,10 +198,48 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>
-                All notifications are currently sent by email only. SMS notifications coming soon.
-              </CardDescription>
+              <CardDescription>Choose how you receive booking and queue notifications.</CardDescription>
             </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="notificationPreference">Notification method</Label>
+                <Select value={notificationPreference} onValueChange={setNotificationPreference}>
+                  <SelectTrigger id="notificationPreference">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EMAIL_ONLY">Email only</SelectItem>
+                    <SelectItem value="SMS_ONLY">SMS only</SelectItem>
+                    <SelectItem value="EMAIL_AND_SMS">Email and SMS</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {(notificationPreference === "SMS_ONLY" || notificationPreference === "EMAIL_AND_SMS") && (
+                <div className="space-y-2">
+                  <Label htmlFor="phoneNumber">Phone number</Label>
+                  <Input
+                    id="phoneNumber"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="+1 555 000 0000"
+                  />
+                </div>
+              )}
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-700">
+                  {success}
+                </div>
+              )}
+              <Button onClick={handleSave} disabled={saving} className="w-full">
+                {saving ? "Saving..." : "Save Preferences"}
+              </Button>
+            </CardContent>
           </Card>
 
           {/* Notification Info */}

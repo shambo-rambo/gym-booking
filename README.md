@@ -2,239 +2,207 @@
 
 A web-based booking system for apartment building gym and sauna facilities.
 
-## All Phases Complete ✓
+## Stack
 
-### Phase 1: Authentication & Infrastructure ✓
-- Authentication system with NextAuth
-- Database setup with Prisma + PostgreSQL
-- User registration and login
-- Basic navigation and layouts
+- **Framework:** Next.js 14 (App Router) · TypeScript
+- **Database:** PostgreSQL via [Neon](https://neon.tech) (serverless) · Prisma ORM
+- **Auth:** NextAuth.js v5
+- **UI:** Tailwind CSS · shadcn/ui
+- **Email:** Resend
+- **Hosting:** Firebase App Hosting (project: `watertower-gym`)
+- **Cron jobs:** Google Cloud Scheduler
 
-### Phase 2: Booking System ✓
-- Full booking calendar (week view)
-- Create bookings (exclusive and shared)
-- Anti-hoarding rules working
-- Booking limits enforcement
-- Capacity checks
-- My Bookings page with cancellation
-- All validation rules implemented
+---
 
-### Phase 3: Queue System ✓
-- Queue system for full slots
-- Join queue when slot is full
-- Automatic notification when slot becomes available
-- 30-minute claim window
-- Queue page with claim/leave functionality
-- Position tracking
-- Auto-refresh queue status
+## Getting Started (Local Development)
 
-### Phase 4: Notifications ✓
-- Email notifications via Resend
-- SMS notifications via Twilio
-- Booking confirmations and reminders
-- Queue alerts with 30-minute claim windows
-- User notification preferences
-- Automated cron jobs for reminders and queue expiry
-
-### Phase 5: Manager Features ✓
-- Manager dashboard with role-based access
-- User management (approve/reject/deactivate)
-- Booking management (view all, cancel with reason)
-- Facility management (block slots for maintenance)
-- Announcements system with email broadcast
-- All admin controls with comprehensive UI
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 20.7.0 or higher
-- PostgreSQL database (use [Neon](https://neon.tech) for free serverless Postgres)
-
-### Setup
-
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-2. **Set up your database**
-   - Create a PostgreSQL database (recommended: [Neon](https://neon.tech))
-   - Copy your connection string
-
-3. **Configure environment variables**
-
-   Edit `.env` and update the `DATABASE_URL`:
-   ```env
-   DATABASE_URL="postgresql://user:password@host/database"
-   ```
-
-4. **Generate Prisma client and push schema**
-   ```bash
-   npx prisma generate
-   npx prisma db push
-   ```
-
-5. **Seed the database with manager accounts**
-   ```bash
-   npm run db:seed
-   ```
-
-   This creates 2 manager accounts:
-   - Email: `manager1@gym.local` / Password: `manager123`
-   - Email: `manager2@gym.local` / Password: `manager123`
-
-6. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-
-7. **Open the app**
-
-   Visit [http://localhost:3000](http://localhost:3000)
-
-## Testing the App
-
-1. **Register and verify a user:**
-   ```sql
-   -- After registering, manually verify your account:
-   UPDATE "User" SET status = 'VERIFIED' WHERE email = 'your@email.com';
-   ```
-
-2. **Book facilities:**
-   - Visit the calendar
-   - Toggle between Gym and Sauna
-   - Click on time slots to book
-   - Try both exclusive and shared bookings
-   - For shared gym: select equipment
-
-3. **Test anti-hoarding rules:**
-   - Book exclusive slot on Monday 6pm
-   - Try to book Tuesday 6pm (will be blocked)
-   - Book shared slot 3 times in one week
-   - 4th time will fail
-
-4. **View and cancel bookings:**
-   - Go to "My Bookings"
-   - See all upcoming bookings
-   - Cancel any booking
-
-5. **Test queue system:**
-   - Book a slot with User 1
-   - Try to book same slot with User 2 → "Join Queue"
-   - User 2 joins queue
-   - Check Queue page → shows position
-   - User 1 cancels booking
-   - User 2 sees notification on Queue page
-   - User 2 claims the slot
-
-## Deployment to Vercel
-
-### 1. Set Environment Variables
-
-In your Vercel project settings, add the following environment variables:
-
-```env
-DATABASE_URL="postgresql://user:password@host/database"
-NEXTAUTH_SECRET="your-random-secret-here"
-NEXTAUTH_URL="https://your-domain.vercel.app"
-RESEND_API_KEY="re_xxxxxxxxxxxx"
-TWILIO_ACCOUNT_SID="ACxxxxxxxxxxxx"
-TWILIO_AUTH_TOKEN="your-twilio-auth-token"
-TWILIO_PHONE_NUMBER="+1234567890"
-```
-
-Generate a random secret for NEXTAUTH_SECRET:
-```bash
-openssl rand -base64 32
-```
-
-### 2. Deploy to Vercel
+### 1. Install dependencies
 
 ```bash
-vercel --prod
+npm install
 ```
 
-### 3. Initialize Database
+### 2. Configure environment variables
 
-After deployment, run these commands to set up your database:
+Copy `.env.example` to `.env` and fill in the values:
 
 ```bash
+cp .env.example .env
+```
+
+| Variable | Description |
+|----------|-------------|
+| `DATABASE_URL` | Neon connection string (pooled) |
+| `DIRECT_URL` | Neon direct connection string (for Prisma migrations) |
+| `AUTH_SECRET` | Random secret for NextAuth — generate with `openssl rand -base64 32` |
+| `AUTH_URL` | Full URL of the app (e.g. `http://localhost:3000` for local) |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `RESEND_API_KEY` | Resend API key for email notifications |
+| `RESEND_FROM_EMAIL` | From address for outgoing emails |
+| `BUILDING_CODE` | Secret code residents use to self-verify at registration |
+| `CRON_SECRET` | Bearer token for cron job routes — generate with `openssl rand -base64 32` |
+
+### 3. Set up the database
+
+```bash
+npx prisma generate
 npx prisma db push
-npx prisma db seed
+npm run db:seed
 ```
 
-The seed command creates two manager accounts:
-- Email: `manager1@gym.local` / Password: `manager123`
-- Email: `manager2@gym.local` / Password: `manager123`
+The seed script creates two manager accounts:
+- `manager1@gym.local` / `manager123`
+- `manager2@gym.local` / `manager123`
 
-### 4. Cron Jobs
+### 4. Run the dev server
 
-The project includes `vercel.json` with cron job configuration:
-- Booking reminders: Every hour
-- Queue claim expiry: Every 5 minutes
+```bash
+npm run dev
+```
 
-These will run automatically on Vercel.
+Visit [http://localhost:3000](http://localhost:3000)
 
-See `PHASE5_COMPLETE.md` for detailed Phase 5 documentation.
+---
+
+## Deployment (Firebase App Hosting)
+
+The app is deployed on **Firebase App Hosting** (project `watertower-gym`, region `asia-southeast1`).
+
+Live URL: `https://gym-booking--watertower-gym.asia-southeast1.hosted.app`
+
+### 1. Fix the failing build (first-time setup)
+
+The current build fails because `GOOGLE_CLIENT_ID` hasn't been granted to the App Hosting backend. Run:
+
+```bash
+firebase apphosting:secrets:grantaccess GOOGLE_CLIENT_ID --backend gym-booking
+```
+
+Repeat for any other secrets that fail:
+
+```bash
+firebase apphosting:secrets:grantaccess GOOGLE_CLIENT_SECRET --backend gym-booking
+```
+
+### 2. Add or update secrets
+
+All secrets are managed via Firebase Secret Manager. To add or update a value:
+
+```bash
+firebase apphosting:secrets:set SECRET_NAME
+```
+
+Secrets currently wired in `apphosting.yaml`:
+
+| Secret | Purpose |
+|--------|---------|
+| `DATABASE_URL` | Neon pooled connection |
+| `DIRECT_URL` | Neon direct connection (Prisma migrations) |
+| `AUTH_SECRET` | NextAuth signing secret |
+| `GOOGLE_CLIENT_ID` | Google OAuth |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth |
+| `RESEND_API_KEY` | Email notifications |
+| `BUILDING_CODE` | Resident self-verification code |
+| `CRON_SECRET` | Cron job authentication |
+
+### 3. Deploy
+
+Firebase App Hosting deploys automatically on push to the connected branch. To trigger manually:
+
+```bash
+firebase apphosting:backends:get gym-booking
+```
+
+Then push to the connected Git branch.
+
+---
+
+## Cron Jobs (Google Cloud Scheduler)
+
+Firebase App Hosting does not have built-in cron support. Cron jobs run via **Google Cloud Scheduler**, which calls the app's cron API routes on a schedule.
+
+The three jobs and their schedules:
+
+| Job | Route | Schedule | Purpose |
+|-----|-------|----------|---------|
+| `booking-reminders` | `/api/cron/booking-reminders` | Hourly | Sends reminder notifications 2 hours before upcoming bookings |
+| `expire-queue-claims` | `/api/cron/expire-queue-claims` | Every 5 min | Expires unclaimed queue notifications, notifies next person |
+| `release-waitlisted-slots` | `/api/cron/release-waitlisted-slots` | Hourly | Auto-releases slots 3 hours before session if queue exists |
+
+All routes require `Authorization: Bearer {CRON_SECRET}` — Cloud Scheduler sends this header.
+
+### First-time setup
+
+Run the setup script once after deploying:
+
+```bash
+# Get your CRON_SECRET value from Firebase Secret Manager
+export CRON_SECRET="your-cron-secret-value"
+bash scripts/setup-cloud-scheduler.sh
+```
+
+The script creates (or updates) all three Cloud Scheduler jobs. Verify them at:
+`https://console.cloud.google.com/cloudscheduler?project=watertower-gym`
+
+---
 
 ## Project Structure
 
 ```
 app/
-├── api/auth/           # Auth endpoints
-├── login/              # Login page
-├── register/           # Registration page
-├── my-bookings/        # User bookings (Phase 2)
-├── queue/              # Queue management (Phase 3)
-└── manager/            # Manager dashboard (Phase 5)
+├── api/
+│   ├── auth/           # Registration and onboarding
+│   ├── bookings/       # Booking CRUD and availability
+│   ├── cron/           # Scheduled job endpoints
+│   ├── manager/        # Manager-only endpoints
+│   ├── queue/          # Waitlist/queue management
+│   └── user/           # User settings
+├── book/               # Booking calendar
+├── login/
+├── manager/            # Manager dashboard
+├── onboarding/         # Google OAuth onboarding flow
+├── queue/              # Waitlist page
+├── register/
+└── settings/
 
 components/
 ├── ui/                 # shadcn/ui components
-├── Navbar.tsx          # Main navigation
-└── SessionProvider.tsx # Auth session wrapper
+├── BookingRules.tsx
+├── LoadingSpinner.tsx
+└── Navbar.tsx
 
 lib/
 ├── auth.ts             # NextAuth configuration
+├── booking-rules.ts    # Anti-hoarding validation logic
+├── equipment.ts        # Equipment labels and booking type formatters
 ├── prisma.ts           # Prisma client
-└── utils.ts            # Utility functions
+└── utils.ts
+
+scripts/
+├── setup-cloud-scheduler.sh  # Creates Google Cloud Scheduler jobs
+└── db:seed (via package.json)
 
 prisma/
-├── schema.prisma       # Database schema
-└── seed.ts             # Seed script
+├── schema.prisma
+└── seed.ts
 ```
+
+---
 
 ## Available Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run db:push` - Push schema to database
-- `npm run db:seed` - Seed database with manager accounts
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm run db:push` | Push Prisma schema to database |
+| `npm run db:seed` | Seed database with manager accounts |
 
-## Tech Stack
-
-- **Framework:** Next.js 14 (App Router)
-- **Database:** PostgreSQL with Prisma ORM
-- **Auth:** NextAuth.js v5
-- **UI:** Tailwind CSS + shadcn/ui
-- **Language:** TypeScript
+---
 
 ## Manager Access
 
-To access the manager dashboard:
-
-1. Login with a manager account (see seed data above)
-2. Navigate to `/manager` or click "Manager Dashboard" in the navbar
-3. From the dashboard you can:
-   - Approve/reject pending user registrations
-   - View and cancel all bookings
-   - Block time slots for maintenance
-   - Post building-wide announcements
-
-## Testing User Flow
-
-1. **Register a new user** at `/register`
-2. **Login as manager** (manager1@gym.local / manager123)
-3. **Approve the user** at `/manager/users`
-4. **Login as the new user** and start booking!
+1. Log in with a manager account (seeded: `manager1@gym.local` / `manager123`)
+2. Navigate to `/manager`
+3. From the dashboard: approve registrations, manage bookings, block slots, post announcements

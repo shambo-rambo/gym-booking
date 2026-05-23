@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { CheckCircle } from "lucide-react"
+import LoadingSpinner from "@/components/LoadingSpinner"
 import { UNITS_BY_FLOOR } from "@/lib/apartments"
 
 function RegisterForm() {
@@ -84,10 +85,9 @@ function RegisterForm() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Create account</CardTitle>
-          <CardDescription>
-            Book the gym and sauna for your building
-          </CardDescription>
+          <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-gray-400">The Residences</p>
+          <CardTitle>Create Account</CardTitle>
+          <CardDescription>Register to book gym and sauna facilities in your building.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -235,15 +235,7 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <p className="text-center text-gray-500">Loading...</p>
-          </CardContent>
-        </Card>
-      </div>
-    }>
+    <Suspense fallback={<LoadingSpinner />}>
       <RegisterForm />
     </Suspense>
   )

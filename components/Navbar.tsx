@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils"
 import { useState } from "react"
 
 const PAGE_TITLES: Record<string, string> = {
-  "/":                       "My Bookings",
+  "/":                       "Home",
   "/book":                   "Reserve Your Space",
-  "/my-bookings":            "My Bookings",
+  "/my-bookings":            "Home",
   "/waitlist":               "Waitlist",
   "/queue":                  "Waitlist",
   "/settings":               "Settings",

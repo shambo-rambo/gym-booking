@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useState } from "react"
+import LoadingSpinner from "@/components/LoadingSpinner"
 import { signIn } from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -49,6 +50,7 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const registered = searchParams.get("registered")
+  const authError = searchParams.get("error")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -83,10 +85,16 @@ function LoginForm() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Sign In</CardTitle>
-          <CardDescription>Sign in to your gym booking account</CardDescription>
+          <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-gray-400">The Residences</p>
+          <CardTitle>Amenity Booking</CardTitle>
+          <CardDescription>Access gym and sauna bookings for your building.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {authError === "not_verified" && (
+            <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-3">
+              Your account is pending verification. A manager will approve it shortly.
+            </div>
+          )}
           {registered === "verified" && (
             <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded p-3">
               Account created — you can log in now.
@@ -154,17 +162,7 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-          <Card className="w-full max-w-md">
-            <CardContent className="pt-6">
-              <p className="text-center text-gray-500">Loading...</p>
-            </CardContent>
-          </Card>
-        </div>
-      }
-    >
+    <Suspense fallback={<LoadingSpinner />}>
       <LoginForm />
     </Suspense>
   )

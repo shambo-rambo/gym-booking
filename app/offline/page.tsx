@@ -36,7 +36,7 @@ export default function OfflinePage() {
               </a>
             </li>
             <li>
-              <a href="/my-bookings" className="text-sm text-indigo-600 hover:underline">
+              <a href="/" className="text-sm text-indigo-600 hover:underline">
                 My Bookings
               </a>
             </li>

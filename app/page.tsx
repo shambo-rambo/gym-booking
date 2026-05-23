@@ -86,6 +86,8 @@ export default function HomePage() {
   const [cancellingKey, setCancellingKey] = useState<string | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [leavingId, setLeavingId] = useState<string | null>(null)
+  const [confirmCancelKey, setConfirmCancelKey] = useState<string | null>(null)
+  const [confirmLeaveId, setConfirmLeaveId] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login")
@@ -109,7 +111,6 @@ export default function HomePage() {
   }
 
   const handleCancel = async (sessionKey: string, ids: string[]) => {
-    if (!confirm("Cancel this booking?")) return
     setCancellingKey(sessionKey)
     setCancelError(null)
     try {
@@ -130,7 +131,6 @@ export default function HomePage() {
   }
 
   const handleLeaveWaitlist = async (id: string) => {
-    if (!confirm("Leave this waitlist?")) return
     setLeavingId(id)
     try {
       const res = await fetch(`/api/queue/${id}`, { method: "DELETE" })
@@ -220,20 +220,31 @@ export default function HomePage() {
                     )}
                     <div className="flex gap-2">
                       {isNotified && !hasExpired ? (
-                        <Link href="/waitlist" className="flex-1">
+                        <Link href="/queue" className="flex-1">
                           <Button size="sm" className="w-full bg-green-500 hover:bg-green-600 text-white">
                             Claim Slot
                           </Button>
                         </Link>
+                      ) : confirmLeaveId === entry.id ? (
+                        <div className="flex gap-2 flex-1">
+                          <Button size="sm" variant="destructive" className="flex-1"
+                            disabled={leavingId === entry.id}
+                            onClick={() => { setConfirmLeaveId(null); handleLeaveWaitlist(entry.id) }}>
+                            {leavingId === entry.id ? "Leaving…" : "Yes, leave"}
+                          </Button>
+                          <Button size="sm" variant="outline" className="flex-1"
+                            onClick={() => setConfirmLeaveId(null)}>
+                            Keep spot
+                          </Button>
+                        </div>
                       ) : (
                         <Button
                           variant="outline"
                           size="sm"
                           className="flex-1"
-                          disabled={leavingId === entry.id}
-                          onClick={() => handleLeaveWaitlist(entry.id)}
+                          onClick={() => setConfirmLeaveId(entry.id)}
                         >
-                          {leavingId === entry.id ? "Leaving…" : "Leave Waitlist"}
+                          Leave Waitlist
                         </Button>
                       )}
                     </div>
@@ -264,9 +275,8 @@ export default function HomePage() {
               {upcomingSessions.map(s => {
                 const key = s.ids.join(",")
                 const equipment = s.equipment.filter(Boolean) as EquipmentType[]
-                const [h, m] = s.startTime.split(":").map(Number)
-                const start = new Date(s.date)
-                start.setHours(h, m, 0, 0)
+                const dateStr = String(s.date).slice(0, 10)
+                const start = new Date(`${dateStr}T${s.startTime}:00`)
                 const minutesUntil = (start.getTime() - Date.now()) / (1000 * 60)
                 const canCancel = minutesUntil > 30
 
@@ -298,15 +308,29 @@ export default function HomePage() {
                         Cannot cancel within 30 minutes of start
                       </p>
                     )}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
-                      disabled={cancellingKey === key || !canCancel}
-                      onClick={() => handleCancel(key, s.ids)}
-                    >
-                      {cancellingKey === key ? "Cancelling…" : "Cancel Booking"}
-                    </Button>
+                    {confirmCancelKey === key ? (
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="destructive" className="flex-1"
+                          disabled={cancellingKey === key}
+                          onClick={() => { setConfirmCancelKey(null); handleCancel(key, s.ids) }}>
+                          {cancellingKey === key ? "Cancelling…" : "Yes, cancel"}
+                        </Button>
+                        <Button size="sm" variant="outline" className="flex-1"
+                          onClick={() => setConfirmCancelKey(null)}>
+                          Keep booking
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
+                        disabled={!canCancel}
+                        onClick={() => setConfirmCancelKey(key)}
+                      >
+                        Cancel Booking
+                      </Button>
+                    )}
                   </div>
                 )
               })}

@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { format, formatDistanceToNow } from "date-fns"
+import { EQUIPMENT_LABELS, formatBookingType } from "@/lib/equipment"
+import type { EquipmentType } from "@prisma/client"
+import LoadingSpinner from "@/components/LoadingSpinner"
 
 interface WaitlistEntry {
   id: string
@@ -29,6 +32,9 @@ export default function WaitlistPage() {
   const [queues, setWaitlists] = useState<{ active: WaitlistEntry[] }>({ active: [] })
   const [loading, setLoading] = useState(true)
   const [actioningId, setActioningId] = useState<string | null>(null)
+  const [pageSuccess, setPageSuccess] = useState("")
+  const [pageError, setPageError] = useState("")
+  const [confirmLeaveId, setConfirmLeaveId] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -64,24 +70,21 @@ export default function WaitlistPage() {
       const data = await response.json()
 
       if (response.ok) {
-        alert("Booking claimed successfully!")
+        setPageSuccess("Booking claimed! Redirecting...")
         fetchWaitlists()
-        router.push("/my-bookings")
+        setTimeout(() => router.push("/"), 1500)
       } else {
-        alert(data.error || "Failed to claim slot")
+        setPageError(data.error || "Failed to claim slot")
       }
     } catch (error) {
-      alert("Failed to claim slot")
+      setPageError("Failed to claim slot")
     } finally {
       setActioningId(null)
     }
   }
 
   const handleLeave = async (queueId: string) => {
-    if (!confirm("Are you sure you want to leave this queue?")) {
-      return
-    }
-
+    setConfirmLeaveId(null)
     setActioningId(queueId)
 
     try {
@@ -94,21 +97,17 @@ export default function WaitlistPage() {
         router.refresh()
       } else {
         const data = await response.json()
-        alert(data.error || "Failed to leave queue")
+        setPageError(data.error || "Failed to leave queue")
       }
     } catch (error) {
-      alert("Failed to leave queue")
+      setPageError("Failed to leave queue")
     } finally {
       setActioningId(null)
     }
   }
 
   if (status === "loading" || loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Loading...</p>
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
   if (!session) {
@@ -138,7 +137,7 @@ export default function WaitlistPage() {
               </CardDescription>
             </div>
             <Badge variant={queue.bookingType === "EXCLUSIVE" ? "default" : "secondary"}>
-              {queue.bookingType}
+              {formatBookingType(queue.bookingType)}
             </Badge>
           </div>
         </CardHeader>
@@ -152,7 +151,7 @@ export default function WaitlistPage() {
               <div className="flex justify-between">
                 <span className="text-gray-600">Equipment:</span>
                 <span className="font-medium">
-                  {queue.equipmentType.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+                  {EQUIPMENT_LABELS[queue.equipmentType as EquipmentType] ?? queue.equipmentType}
                 </span>
               </div>
             )}
@@ -200,15 +199,27 @@ export default function WaitlistPage() {
               >
                 {actioningId === queue.id ? "Claiming..." : "Claim Slot"}
               </Button>
+            ) : confirmLeaveId === queue.id ? (
+              <div className="flex gap-2 flex-1">
+                <Button size="sm" variant="destructive" className="flex-1"
+                  disabled={actioningId === queue.id}
+                  onClick={() => handleLeave(queue.id)}>
+                  {actioningId === queue.id ? "Leaving..." : "Yes, leave"}
+                </Button>
+                <Button size="sm" variant="outline" className="flex-1"
+                  onClick={() => setConfirmLeaveId(null)}>
+                  Keep spot
+                </Button>
+              </div>
             ) : (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleLeave(queue.id)}
+                onClick={() => setConfirmLeaveId(queue.id)}
                 disabled={actioningId === queue.id}
                 className="flex-1"
               >
-                {actioningId === queue.id ? "Leaving..." : "Leave Waitlist"}
+                Leave Waitlist
               </Button>
             )}
           </div>
@@ -227,6 +238,17 @@ export default function WaitlistPage() {
             Refresh
           </Button>
         </div>
+
+        {pageSuccess && (
+          <div className="mb-4 bg-green-50 border border-green-200 rounded p-3 text-sm text-green-700">
+            {pageSuccess}
+          </div>
+        )}
+        {pageError && (
+          <div className="mb-4 bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+            {pageError}
+          </div>
+        )}
 
         {queues.active.length === 0 ? (
           <Card>

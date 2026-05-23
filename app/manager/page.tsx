@@ -6,16 +6,13 @@ import Navbar from "@/components/Navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import LoadingSpinner from "@/components/LoadingSpinner"
 
 export default function ManagerPage() {
   const { data: session, status } = useSession()
 
   if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p>Loading...</p>
-      </div>
-    )
+    return <LoadingSpinner />
   }
 
   if (!session) {

@@ -38,6 +38,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
+    async signIn({ account, profile }) {
+      if (account?.provider === "google" && profile?.email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: profile.email },
+        })
+        if (dbUser && dbUser.status !== "VERIFIED") {
+          return "/login?error=not_verified"
+        }
+      }
+      return true
+    },
     async jwt({ token, user, account, trigger, session }) {
       // Credentials sign-in
       if (user && account?.provider === "credentials") {
@@ -52,10 +63,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           where: { email: token.email! },
         })
         if (dbUser) {
-          if (dbUser.status !== "VERIFIED") {
-            token.error = "not_verified"
-            return token
-          }
           token.id = dbUser.id
           token.role = dbUser.role
           token.needsOnboarding = false

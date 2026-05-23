@@ -10,6 +10,7 @@
 import { test, expect } from "@playwright/test"
 import { USERS } from "./fixtures"
 import { loginAs } from "./helpers/auth"
+import { bookSlotAndConfirm } from "./helpers/booking"
 import { clearBookingsForUser, closeDb } from "./helpers/db"
 
 test.afterAll(async () => {
@@ -20,21 +21,12 @@ test.afterAll(async () => {
 test("FLOW-04: cancel a booking from the home page", async ({ page }) => {
   await loginAs(page, USERS.userA.email, USERS.userA.password)
 
-  // --- Create a booking ---
+  // Create a booking
   await page.goto("/book")
   await page.getByRole("button", { name: "Private Sauna" }).click()
-  await page.waitForSelector("button.bg-green-50", { timeout: 15_000 })
-  await page.locator("button.bg-green-50").first().click()
+  await bookSlotAndConfirm(page)
 
-  const dialog = page.getByRole("dialog")
-  await expect(dialog).toBeVisible()
-  await dialog.getByRole("button", { name: "Confirm Booking" }).click()
-  await expect(dialog.getByText(/confirmed|booked|success/i)).toBeVisible({ timeout: 10_000 })
-
-  const closeBtn = dialog.getByRole("button", { name: /close/i })
-  if (await closeBtn.isVisible()) await closeBtn.click()
-
-  // --- Cancel from home page ---
+  // Cancel from home page
   await page.goto("/")
   await expect(page.getByText(/sauna/i)).toBeVisible()
 

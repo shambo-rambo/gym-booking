@@ -32,10 +32,10 @@ test("FLOW-01: resident can register and is left in PENDING state", async ({ pag
 
   await page.click('button[type="submit"]')
 
-  // After registration the app should show a success / pending notice
-  // rather than redirecting into the authenticated app.
+  // Register redirects to /login?registered=pending
+  await page.waitForURL(/\/login/, { timeout: 10_000 })
   await expect(
-    page.getByText(/pending|submitted|verification|check your email/i)
+    page.getByText(/registration received|manager will approve|pending/i)
   ).toBeVisible({ timeout: 10_000 })
 })
 

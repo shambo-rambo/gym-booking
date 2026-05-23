@@ -32,9 +32,10 @@ test("FLOW-07: manager approves a pending resident", async ({ page }) => {
   await page.fill("#password", "TestPass123!")
   await page.click('button[type="submit"]')
 
-  // Wait for registration confirmation (stay on register page or show success)
+  // Register redirects to /login?registered=pending
+  await page.waitForURL(/\/login/, { timeout: 10_000 })
   await expect(
-    page.getByText(/pending|submitted|verification|check your email/i)
+    page.getByText(/registration received|manager will approve|pending/i)
   ).toBeVisible({ timeout: 10_000 })
 
   // --- Log in as manager and approve ---

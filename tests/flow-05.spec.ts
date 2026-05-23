@@ -11,6 +11,7 @@
 import { test, expect, chromium } from "@playwright/test"
 import { USERS, BASE_URL } from "./fixtures"
 import { loginAs } from "./helpers/auth"
+import { clickFirstAvailableSlot } from "./helpers/booking"
 import { clearBookingsForUser, closeDb } from "./helpers/db"
 
 test.afterAll(async () => {
@@ -29,17 +30,16 @@ test("FLOW-05: userB joins waitlist for slot booked by userA", async () => {
 
   await pageA.goto("/book")
   await pageA.getByRole("button", { name: "Private Sauna" }).click()
-  await pageA.waitForSelector("button.bg-green-50", { timeout: 15_000 })
-  await pageA.locator("button.bg-green-50").first().click()
+  await clickFirstAvailableSlot(pageA)
 
   const dialogA = pageA.getByRole("dialog")
   await expect(dialogA).toBeVisible()
+
+  // Capture the time so userB can find the same slot
+  const slotTimeText = await dialogA.locator("span, p, h2, h3").filter({ hasText: /\d{2}:\d{2}/ }).first().textContent()
+
   await dialogA.getByRole("button", { name: "Confirm Booking" }).click()
   await expect(dialogA.getByText(/confirmed|booked|success/i)).toBeVisible({ timeout: 10_000 })
-
-  // Capture which slot was booked (date + time shown in the dialog header)
-  const slotText = await dialogA.locator("h2, h3, [role='heading']").first().textContent()
-
   const closeBtnA = dialogA.getByRole("button", { name: /close/i })
   if (await closeBtnA.isVisible()) await closeBtnA.click()
 
@@ -50,29 +50,31 @@ test("FLOW-05: userB joins waitlist for slot booked by userA", async () => {
 
   await pageB.goto("/book")
   await pageB.getByRole("button", { name: "Private Sauna" }).click()
-  await pageB.waitForSelector("button", { timeout: 15_000 })
 
-  // Find the slot that userA just booked — it may now show as unavailable/full
-  // We look for a slot button that contains a queue indicator or is styled differently
-  // Click the first non-green slot (booked/full) or look for the waitlist button
-  const bookedSlot = pageB.locator("button.bg-red-50, button.bg-orange-50, button.bg-amber-50, button.bg-gray-100").first()
-  if (await bookedSlot.isVisible({ timeout: 5_000 })) {
-    await bookedSlot.click()
-  } else {
-    // Slot may still show as partial — click first slot and see if waitlist option appears
-    await pageB.locator("button.bg-green-50, button[class*='slot']").first().click()
-  }
+  // Wait for the skeleton to clear, then click the same time slot
+  await pageB.waitForFunction(
+    () => document.querySelectorAll(".animate-pulse").length === 0,
+    { timeout: 15_000 }
+  )
+
+  // Click the same time as userA booked. The slot may now show as full/unavailable.
+  // It should still be clickable so the dialog offers Join Waitlist.
+  const targetSlot = slotTimeText
+    ? pageB.locator("button").filter({ hasText: slotTimeText.trim() }).first()
+    : pageB.locator("button:not([disabled])").filter({ hasText: /\b\d{1,2}:\d{2}\b/ }).first()
+
+  await expect(targetSlot).toBeVisible({ timeout: 10_000 })
+  await targetSlot.click()
 
   const dialogB = pageB.getByRole("dialog")
   await expect(dialogB).toBeVisible()
 
-  // Should see "Join Waitlist" or "Join Queue" button (slot is full for EXCLUSIVE)
+  // Full/unavailable slot should show "Join Waitlist" or "Join Queue"
   const joinBtn = dialogB.getByRole("button", { name: /join waitlist|join queue/i })
   await expect(joinBtn).toBeVisible({ timeout: 8_000 })
   await joinBtn.click()
 
   await expect(dialogB.getByText(/queue|waitlist|joined/i)).toBeVisible({ timeout: 10_000 })
-
   const closeBtnB = dialogB.getByRole("button", { name: /close/i })
   if (await closeBtnB.isVisible()) await closeBtnB.click()
 

@@ -42,3 +42,5 @@ next-env.d.ts
 /public/swe-worker-*.js.map
 .claude/
 client_secret*.json
+playwright-report/
+test-results/

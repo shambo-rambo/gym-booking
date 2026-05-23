@@ -46,9 +46,7 @@ test("FLOW-06: userB is notified and claims slot after userA cancels", async () 
   const slotTimeText = await dialogA.locator("span, p").filter({ hasText: /\d{2}:\d{2}/ }).first().textContent()
 
   await dialogA.getByRole("button", { name: "Confirm Booking" }).click()
-  await expect(dialogA.getByText(/confirmed|booked|success/i)).toBeVisible({ timeout: 10_000 })
-  const closeBtnA = dialogA.getByRole("button", { name: /close/i })
-  if (await closeBtnA.isVisible()) await closeBtnA.click()
+  await expect(dialogA).not.toBeVisible({ timeout: 10_000 })
 
   // --- userB joins queue for the same slot ---
   const ctxB = await browser.newContext({ baseURL: BASE_URL })

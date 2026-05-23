@@ -39,9 +39,7 @@ test("FLOW-05: userB joins waitlist for slot booked by userA", async () => {
   const slotTimeText = await dialogA.locator("span, p, h2, h3").filter({ hasText: /\d{2}:\d{2}/ }).first().textContent()
 
   await dialogA.getByRole("button", { name: "Confirm Booking" }).click()
-  await expect(dialogA.getByText(/confirmed|booked|success/i)).toBeVisible({ timeout: 10_000 })
-  const closeBtnA = dialogA.getByRole("button", { name: /close/i })
-  if (await closeBtnA.isVisible()) await closeBtnA.click()
+  await expect(dialogA).not.toBeVisible({ timeout: 10_000 })
 
   // Context B: userB tries to book the same slot
   const ctxB = await browser.newContext({ baseURL: BASE_URL })

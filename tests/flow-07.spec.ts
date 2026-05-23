@@ -35,8 +35,29 @@ test("FLOW-07: manager approves a pending resident", async ({ page }) => {
   const tabpanel = page.getByRole("tabpanel", { name: /pending/i })
   await expect(tabpanel).toBeVisible({ timeout: 10_000 })
   await expect(tabpanel.getByText(pendingEmail)).toBeVisible({ timeout: 5_000 })
-  await tabpanel.getByRole("button", { name: /approve/i }).click()
 
-  // User disappears from pending list
-  await expect(tabpanel.getByText(pendingEmail)).not.toBeVisible({ timeout: 10_000 })
+  // Watch for the PATCH before clicking so we don't miss a fast response
+  const patchDone = page.waitForResponse(
+    (resp) =>
+      resp.url().includes("/api/manager/users/") &&
+      resp.request().method() === "PATCH",
+    { timeout: 10_000 }
+  )
+  await tabpanel.getByRole("button", { name: /approve/i }).click()
+  const patch = await patchDone
+  expect(patch.status()).toBe(200)
+
+  // handleVerify calls fetchUsers() on success — wait for the GET to complete
+  await page.waitForResponse(
+    (resp) =>
+      resp.url().includes("/api/manager/users") &&
+      resp.request().method() === "GET" &&
+      resp.status() === 200,
+    { timeout: 10_000 }
+  )
+
+  // Tab trigger should now read "Pending (0)"
+  await expect(page.getByRole("tab", { name: /pending/i })).toContainText("(0)", {
+    timeout: 5_000,
+  })
 })

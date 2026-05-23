@@ -45,8 +45,8 @@ export async function bookSlotAndConfirm(page: Page): Promise<void> {
   const dialog = page.getByRole("dialog")
   await expect(dialog).toBeVisible()
   await dialog.getByRole("button", { name: "Confirm Booking" }).click()
-  await expect(dialog.getByText(/confirmed|booked|success/i)).toBeVisible({ timeout: 10_000 })
 
-  const closeBtn = dialog.getByRole("button", { name: /close/i })
-  if (await closeBtn.isVisible()) await closeBtn.click()
+  // handleBook() calls onClose() immediately on success — no success text is shown.
+  // Wait for the dialog to disappear as the confirmation signal.
+  await expect(dialog).not.toBeVisible({ timeout: 10_000 })
 }

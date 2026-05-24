@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Textarea } from "@/components/ui/textarea"
 import { Calendar, Clock, User, Home, Mail, XCircle, Dumbbell, Waves } from "lucide-react"
 import { format } from "date-fns"
+import { EQUIPMENT_LABELS, formatBookingType } from "@/lib/equipment"
+import { EquipmentType } from "@prisma/client"
 
 type Booking = {
   id: string
@@ -190,63 +192,61 @@ export default function ManagerBookingsPage() {
           <div className="space-y-4">
             {bookings.map(booking => (
               <Card key={booking.id}>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        {booking.facilityType === "GYM" ? (
-                          <Dumbbell className="h-5 w-5" />
-                        ) : (
-                          <Waves className="h-5 w-5" />
-                        )}
-                        <CardTitle className="text-lg">
-                          {booking.facilityType}
-                        </CardTitle>
-                        <Badge variant={booking.bookingType === "EXCLUSIVE" ? "default" : "secondary"}>
-                          {booking.bookingType}
-                        </Badge>
-                        {booking.equipmentType && (
-                          <Badge variant="outline">{booking.equipmentType}</Badge>
-                        )}
-                      </div>
-
-                      <CardDescription>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4" />
-                            {booking.user.name}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Home className="h-4 w-4" />
-                            Apartment {booking.user.apartmentNumber}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Mail className="h-4 w-4" />
-                            {booking.user.email}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            {format(new Date(booking.date), 'EEEE, MMMM d, yyyy')}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4" />
-                            {booking.startTime} - {getEndTime(booking.startTime, booking.duration)} ({booking.duration} min)
-                          </div>
-                        </div>
-                      </CardDescription>
-                    </div>
-
-                    <Button
-                      onClick={() => handleCancelClick(booking)}
-                      size="sm"
-                      variant="destructive"
-                      className="ml-4"
-                    >
-                      <XCircle className="h-4 w-4 mr-2" />
-                      Cancel
-                    </Button>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {booking.facilityType === "GYM" ? (
+                      <Dumbbell className="h-5 w-5 flex-shrink-0" />
+                    ) : (
+                      <Waves className="h-5 w-5 flex-shrink-0" />
+                    )}
+                    <CardTitle className="text-lg">
+                      {booking.facilityType === "GYM" ? "Gym" : "Sauna"}
+                    </CardTitle>
+                    <Badge variant={booking.bookingType === "EXCLUSIVE" ? "default" : "secondary"}>
+                      {formatBookingType(booking.bookingType)}
+                    </Badge>
+                    {booking.equipmentType && (
+                      <Badge variant="outline">
+                        {EQUIPMENT_LABELS[booking.equipmentType as EquipmentType] ?? booking.equipmentType}
+                      </Badge>
+                    )}
                   </div>
                 </CardHeader>
+                <CardContent className="pt-0">
+                  <CardDescription>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm mb-4">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        {booking.user.name}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Home className="h-4 w-4" />
+                        Apartment {booking.user.apartmentNumber}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4" />
+                        {booking.user.email}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        {format(new Date(booking.date), 'EEEE, MMMM d, yyyy')}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4" />
+                        {booking.startTime} - {getEndTime(booking.startTime, booking.duration)} ({booking.duration} min)
+                      </div>
+                    </div>
+                  </CardDescription>
+                  <Button
+                    onClick={() => handleCancelClick(booking)}
+                    size="sm"
+                    variant="destructive"
+                    className="w-full sm:w-auto"
+                  >
+                    <XCircle className="h-4 w-4 mr-2" />
+                    Cancel
+                  </Button>
+                </CardContent>
               </Card>
             ))}
           </div>

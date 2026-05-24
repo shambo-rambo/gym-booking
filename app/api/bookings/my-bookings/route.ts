@@ -19,49 +19,18 @@ export async function GET(request: NextRequest) {
     const now = new Date()
     now.setHours(0, 0, 0, 0)
 
-    // Get upcoming bookings (today and future)
-    const upcoming = await prisma.booking.findMany({
-      where: {
-        userId,
-        date: { gte: now }
-      },
-      orderBy: [
-        { date: 'asc' },
-        { startTime: 'asc' }
-      ]
-    })
+    const [upcoming, queueEntries] = await Promise.all([
+      prisma.booking.findMany({
+        where: { userId, date: { gte: now } },
+        orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+      }),
+      prisma.queueEntry.findMany({
+        where: { userId, date: { gte: now } },
+        orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { position: 'asc' }],
+      }),
+    ])
 
-    // Get past bookings (optional)
-    const past = await prisma.booking.findMany({
-      where: {
-        userId,
-        date: { lt: now }
-      },
-      orderBy: [
-        { date: 'desc' },
-        { startTime: 'desc' }
-      ],
-      take: 10 // Limit to last 10
-    })
-
-    // Get queue entries (upcoming only)
-    const queueEntries = await prisma.queueEntry.findMany({
-      where: {
-        userId,
-        date: { gte: now }
-      },
-      orderBy: [
-        { date: 'asc' },
-        { startTime: 'asc' },
-        { position: 'asc' }
-      ]
-    })
-
-    return NextResponse.json({
-      upcoming,
-      past,
-      queue: queueEntries
-    })
+    return NextResponse.json({ upcoming, queue: queueEntries })
 
   } catch (error) {
     console.error("My bookings error:", error)

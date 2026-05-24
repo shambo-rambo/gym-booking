@@ -8,6 +8,7 @@ import {
   checkConsecutiveDays,
   checkDailyLimit,
   checkSessionLimit,
+  parseSlotDateTime,
 } from "@/lib/booking-rules"
 import { sendNotification } from "@/lib/notifications"
 import { format } from "date-fns"
@@ -98,21 +99,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validations 3-5: run all read-only checks in parallel
-    const [sessionCheck, dailyCheck, consecutiveCheck] = await Promise.all([
-      checkSessionLimit(userId, facilityType as FacilityType),
-      checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration),
-      checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime),
-    ])
+    // Last-minute bypass: slots starting within 3 hours skip all three limit checks.
+    // Capacity rules (isSlotAvailable, the transaction re-check) still apply normally.
+    const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - Date.now()) / (1000 * 60)
+    const isLastMinute = minutesUntilSlot <= 180
 
-    if (!sessionCheck.allowed) {
-      return NextResponse.json({ error: sessionCheck.reason }, { status: 400 })
-    }
-    if (!dailyCheck.allowed) {
-      return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
-    }
-    if (!consecutiveCheck.allowed) {
-      return NextResponse.json({ error: consecutiveCheck.reason }, { status: 400 })
+    // Validations 3-5: run all read-only checks in parallel (skipped for last-minute slots)
+    if (!isLastMinute) {
+      const [sessionCheck, dailyCheck, consecutiveCheck] = await Promise.all([
+        checkSessionLimit(userId, facilityType as FacilityType),
+        checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration),
+        checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime),
+      ])
+
+      if (!sessionCheck.allowed) {
+        return NextResponse.json({ error: sessionCheck.reason }, { status: 400 })
+      }
+      if (!dailyCheck.allowed) {
+        return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
+      }
+      if (!consecutiveCheck.allowed) {
+        return NextResponse.json({ error: consecutiveCheck.reason }, { status: 400 })
+      }
     }
 
     // Validation 6: Check availability and create booking in transaction

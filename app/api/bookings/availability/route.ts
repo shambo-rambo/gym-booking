@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
-import { generateTimeSlots } from "@/lib/booking-rules"
+import { generateTimeSlots, parseSlotDateTime } from "@/lib/booking-rules"
 import { parseLocalDate } from "@/lib/date-utils"
 
 export const dynamic = 'force-dynamic'
@@ -169,9 +169,13 @@ export async function GET(request: NextRequest) {
           (b) => b.bookingType === BookingType.EXCLUSIVE
         )
 
-        // Shared anti-hoarding: applies to all slot types for this user
+        // Shared anti-hoarding: applies to all slot types for this user.
+        // Bypassed for slots starting within 3 hours — the booking creation route
+        // skips limit checks for those slots, so the UI must show them as bookable.
+        const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - now.getTime()) / (1000 * 60)
         const antiHoardingBlocked =
-          !userBooking && (
+          !userBooking &&
+          minutesUntilSlot > 180 && (
             isConsecutiveDayConflict(startTime) ||
             exceedsDailyLimit(startTime, duration) ||
             exceedsSessionLimit(startTime)

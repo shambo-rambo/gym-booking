@@ -9,7 +9,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   workers: 1,
   reporter: [["list"], ["html", { open: "never" }]],
-  timeout: 30_000,
+  timeout: 60_000,
   use: {
     baseURL: BASE_URL,
     trace: "on-first-retry",

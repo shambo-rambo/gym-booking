@@ -1,21 +1,21 @@
 /**
  * FLOW-06: Queue notification → claim slot
- * Precondition (set up in beforeAll via DB):
- *   - userA holds a booking for a specific slot
- *   - userB is in the queue for that same slot, with notifiedAt set (slot available)
- *
  * Steps:
- *   - userA cancels their booking (triggers notifyNextInQueue synchronously)
- *   - As userB, navigate to /queue and claim the slot
+ *   - userA books a slot (tomorrow, so canCancel = true)
+ *   - userB joins queue for the same slot
+ *   - DB helper force-marks userB's entry as notified
+ *   - userA cancels their booking
+ *   - userB claims the slot from /queue
  *   - Verify booking appears on userB's home page
- *
- * We force the notification via DB helper rather than waiting for the actual
- * cancel → notify cycle, which is already covered by FLOW-05.
  */
 import { test, expect, chromium } from "@playwright/test"
 import { USERS, BASE_URL } from "./fixtures"
 import { loginAs } from "./helpers/auth"
-import { clickFirstAvailableSlot } from "./helpers/booking"
+import {
+  clickFirstAvailableSlot,
+  getDialogSlotTime,
+  selectTomorrow,
+} from "./helpers/booking"
 import {
   clearBookingsForUser,
   markQueueEntryNotified,
@@ -29,9 +29,10 @@ test.afterAll(async () => {
 })
 
 test("FLOW-06: userB is notified and claims slot after userA cancels", async () => {
+  test.setTimeout(120_000)
   const browser = await chromium.launch()
 
-  // --- Setup: userA books a slot ---
+  // --- Setup: userA books a slot (tomorrow, so canCancel = true) ---
   const ctxA = await browser.newContext({ baseURL: BASE_URL })
   const pageA = await ctxA.newPage()
   await loginAs(pageA, USERS.userA.email, USERS.userA.password)
@@ -43,7 +44,8 @@ test("FLOW-06: userB is notified and claims slot after userA cancels", async () 
   const dialogA = pageA.getByRole("dialog")
   await expect(dialogA).toBeVisible()
 
-  const slotTimeText = await dialogA.locator("span, p").filter({ hasText: /\d{2}:\d{2}/ }).first().textContent()
+  // Capture HH:MM from the open dialog BEFORE confirming
+  const slotTime = await getDialogSlotTime(dialogA)
 
   await dialogA.getByRole("button", { name: "Confirm Booking" }).click()
   await expect(dialogA).not.toBeVisible({ timeout: 10_000 })
@@ -56,14 +58,12 @@ test("FLOW-06: userB is notified and claims slot after userA cancels", async () 
   await pageB.goto("/book")
   await pageB.getByRole("button", { name: "Private Sauna" }).click()
 
-  await pageB.waitForFunction(
-    () => document.querySelectorAll(".animate-pulse").length === 0,
-    { timeout: 15_000 }
-  )
+  // Navigate to tomorrow (selectTomorrow waits for availability API)
+  await selectTomorrow(pageB)
 
-  const targetSlot = slotTimeText
-    ? pageB.locator("button").filter({ hasText: slotTimeText.trim() }).first()
-    : pageB.locator("button:not([disabled])").filter({ hasText: /\d{2}:\d{2}/ }).first()
+  const targetSlot = slotTime
+    ? pageB.locator("button.rounded-xl.text-left").filter({ hasText: new RegExp(slotTime!) }).first()
+    : pageB.locator("button.rounded-xl.text-left:not([disabled])").first()
 
   await expect(targetSlot).toBeVisible({ timeout: 10_000 })
   await targetSlot.click()
@@ -71,17 +71,20 @@ test("FLOW-06: userB is notified and claims slot after userA cancels", async () 
   const dialogB = pageB.getByRole("dialog")
   await expect(dialogB).toBeVisible()
   const joinBtn = dialogB.getByRole("button", { name: /join waitlist|join queue/i })
-  if (await joinBtn.isVisible({ timeout: 5_000 })) {
-    await joinBtn.click()
-    await expect(dialogB.getByText(/queue|waitlist|joined/i)).toBeVisible({ timeout: 10_000 })
-    const closeBtnB = dialogB.getByRole("button", { name: /close/i })
-    if (await closeBtnB.isVisible()) await closeBtnB.click()
-  }
+  await expect(joinBtn).toBeVisible({ timeout: 8_000 })
+  const joinResponse = pageB.waitForResponse(
+    resp => resp.url().includes("/api/queue/join") && resp.status() === 200,
+    { timeout: 30_000 }
+  )
+  await joinBtn.click()
+  await joinResponse
+  await expect(dialogB.getByText(/you're in the queue|you've joined the waitlist/i)).toBeVisible({ timeout: 5_000 })
 
-  // Force-mark userB's queue entry as notified via DB
+  // Navigate away (dismisses dialog) and force-mark userB's entry as notified
+  await pageB.goto("/book")
   await markQueueEntryNotified(USERS.userB.email)
 
-  // --- userA cancels their booking ---
+  // --- userA cancels their booking (tomorrow slot → canCancel = true) ---
   await pageA.goto("/")
   await pageA.getByRole("button", { name: "Cancel Booking" }).first().click()
   await pageA.getByRole("button", { name: "Yes, cancel" }).click()

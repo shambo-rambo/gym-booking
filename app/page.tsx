@@ -140,6 +140,21 @@ export default function HomePage() {
     }
   }
 
+  const handleClaimNow = async (id: string) => {
+    setLeavingId(id)
+    try {
+      const res = await fetch(`/api/queue/claim/${id}`, { method: "POST" })
+      if (res.ok) {
+        fetchData()
+      } else {
+        const data = await res.json()
+        alert(data.error || "Failed to claim slot")
+      }
+    } finally {
+      setLeavingId(null)
+    }
+  }
+
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
@@ -182,6 +197,11 @@ export default function HomePage() {
               {waitlist.map(entry => {
                 const isNotified = !!entry.notifiedAt
                 const hasExpired = entry.expiresAt && new Date(entry.expiresAt) < new Date()
+                const slotDateTime = new Date(entry.date)
+                const [slotH, slotM] = entry.startTime.split(':').map(Number)
+                slotDateTime.setHours(slotH, slotM, 0, 0)
+                const minutesUntilSlot = (slotDateTime.getTime() - Date.now()) / (1000 * 60)
+                const isLastMinute = minutesUntilSlot > 0 && minutesUntilSlot <= 180
                 return (
                   <div
                     key={entry.id}
@@ -225,6 +245,15 @@ export default function HomePage() {
                             Claim Slot
                           </Button>
                         </Link>
+                      ) : isLastMinute && !isNotified ? (
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+                          disabled={leavingId === entry.id}
+                          onClick={() => handleClaimNow(entry.id)}
+                        >
+                          {leavingId === entry.id ? "Claiming…" : "Claim Now"}
+                        </Button>
                       ) : confirmLeaveId === entry.id ? (
                         <div className="flex gap-2 flex-1">
                           <Button size="sm" variant="destructive" className="flex-1"

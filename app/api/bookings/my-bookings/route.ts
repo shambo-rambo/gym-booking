@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { notifyNextInQueue } from "@/lib/queue-notifications"
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +30,27 @@ export async function GET(request: NextRequest) {
         orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { position: 'asc' }],
       }),
     ])
+
+    // Fire last-minute notifications for any unnotified queue entries within 3 hours.
+    // notifyNextInQueue is idempotent (filters notifiedAt: null), so duplicate calls are safe.
+    const rightNow = new Date()
+    for (const entry of queueEntries) {
+      if (entry.notifiedAt) continue
+      const [h, m] = entry.startTime.split(':').map(Number)
+      const slotDateTime = new Date(entry.date)
+      slotDateTime.setHours(h, m, 0, 0)
+      const minutesUntilSlot = (slotDateTime.getTime() - rightNow.getTime()) / (1000 * 60)
+      if (minutesUntilSlot > 0 && minutesUntilSlot <= 180) {
+        notifyNextInQueue(
+          entry.facilityType,
+          entry.bookingType,
+          entry.equipmentType,
+          entry.date,
+          entry.startTime,
+          entry.duration
+        ).catch(err => console.error('[my-bookings] Last-minute queue notification failed:', err))
+      }
+    }
 
     return NextResponse.json({ upcoming, queue: queueEntries })
 

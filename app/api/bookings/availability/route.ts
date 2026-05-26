@@ -240,6 +240,11 @@ export async function GET(request: NextRequest) {
           (b) => b.startTime === startTime && b.duration === duration
         )
 
+        // Within 3 hours and slot is genuinely available: suppress the queue entry so the
+        // UI shows booking buttons instead of "You are in the queue". The last-minute bypass
+        // in the create route will accept the booking; queue entry is cleaned up on book.
+        const lastMinuteBypass = minutesUntilSlot <= 180 && exclusiveStatus === 'available'
+
         return {
           duration,
           exclusive: { status: exclusiveStatus, reason: exclusiveReason },
@@ -256,7 +261,7 @@ export async function GET(request: NextRequest) {
             bookingType: b.bookingType,
             equipmentType: b.equipmentType,
           })),
-          userQueueEntry: userQueueEntry
+          userQueueEntry: (userQueueEntry && !lastMinuteBypass)
             ? {
                 id: userQueueEntry.id,
                 bookingType: userQueueEntry.bookingType,
@@ -264,7 +269,7 @@ export async function GET(request: NextRequest) {
                 position: userQueueEntry.position,
               }
             : null,
-          queueCount,
+          queueCount: lastMinuteBypass ? Math.max(0, queueCount - 1) : queueCount,
           bookedCount: bookingsStartingHere.length,
         }
       })

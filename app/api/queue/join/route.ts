@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { z } from "zod"
-import { isSlotAvailable, checkConsecutiveDays, checkDailyLimit, checkSessionLimit } from "@/lib/booking-rules"
+import { isSlotAvailable, checkConsecutiveDays, checkDailyLimit, checkSessionLimit, parseSlotDateTime } from "@/lib/booking-rules"
 import { parseLocalDate } from "@/lib/date-utils"
 
 export const dynamic = 'force-dynamic'
@@ -91,6 +91,18 @@ export async function POST(request: NextRequest) {
     const antiHoardingCheck = sessionCheck.allowed && dailyCheck.allowed && consecutiveCheck.allowed
       ? { allowed: true }
       : { allowed: false, reason: sessionCheck.reason ?? dailyCheck.reason ?? consecutiveCheck.reason }
+
+    const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - Date.now()) / (1000 * 60)
+    const isLastMinute = minutesUntilSlot <= 180
+
+    // Within 3 hours: anti-hoarding is bypassed, so if the slot is physically available
+    // the user should book directly rather than queue
+    if (isLastMinute && slotAvailability.allowed) {
+      return NextResponse.json(
+        { error: "This slot is available to book directly — booking limits don't apply within 3 hours of the session." },
+        { status: 400 }
+      )
+    }
 
     // Only prevent queue join if BOTH slot is available AND user passes anti-hoarding
     // If slot is full OR user is blocked by anti-hoarding, allow queue join

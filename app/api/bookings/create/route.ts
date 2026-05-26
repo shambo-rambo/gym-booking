@@ -186,6 +186,11 @@ export async function POST(request: NextRequest) {
         timeout: 10000,
       })
 
+      // Clean up any queue entry the user had for this slot (fire-and-forget)
+      prisma.queueEntry.deleteMany({
+        where: { userId, facilityType: facilityType as FacilityType, date, startTime, duration }
+      }).catch(err => console.error('[Booking] Queue cleanup failed:', err))
+
       // Fire-and-forget — don't block the response on email/SMS delivery
       sendNotification(user, 'BOOKING_CONFIRMATION', {
         facilityType: booking.facilityType.toString(),

@@ -7,6 +7,7 @@ import {
   checkDailyLimit,
   checkConsecutiveDays,
   isSlotAvailable,
+  parseSlotDateTime,
 } from "@/lib/booking-rules"
 import { BookingType, FacilityType, EquipmentType } from "@prisma/client"
 import { sendNotification } from "@/lib/notifications"
@@ -51,23 +52,27 @@ export async function POST(
       )
     }
 
-    // Check if user was notified
-    if (!queueEntry.notifiedAt) {
-      return NextResponse.json(
-        { error: "You have not been notified for this slot yet" },
-        { status: 400 }
-      )
+    const minutesUntilSlot = (parseSlotDateTime(queueEntry.date, queueEntry.startTime).getTime() - Date.now()) / (1000 * 60)
+    const isLastMinute = minutesUntilSlot <= 180
+
+    // Last-minute bypass: skip notification requirement and anti-hoarding checks
+    if (!isLastMinute) {
+      if (!queueEntry.notifiedAt) {
+        return NextResponse.json(
+          { error: "You have not been notified for this slot yet" },
+          { status: 400 }
+        )
+      }
+
+      if (queueEntry.expiresAt && new Date() > queueEntry.expiresAt) {
+        return NextResponse.json(
+          { error: "Your claim window has expired" },
+          { status: 400 }
+        )
+      }
     }
 
-    // Check if claim window expired
-    if (queueEntry.expiresAt && new Date() > queueEntry.expiresAt) {
-      return NextResponse.json(
-        { error: "Your claim window has expired" },
-        { status: 400 }
-      )
-    }
-
-    // Validate booking time constraints
+    // Validate booking time constraints (always enforced)
     const timeValidation = validateBookingTime(
       queueEntry.date,
       queueEntry.startTime,
@@ -81,20 +86,22 @@ export async function POST(
       )
     }
 
-    // Check booking rules
-    const sessionCheck = await checkSessionLimit(userId, queueEntry.facilityType)
-    if (!sessionCheck.allowed) {
-      return NextResponse.json({ error: sessionCheck.reason }, { status: 400 })
-    }
+    // Anti-hoarding checks skipped for last-minute claims
+    if (!isLastMinute) {
+      const sessionCheck = await checkSessionLimit(userId, queueEntry.facilityType)
+      if (!sessionCheck.allowed) {
+        return NextResponse.json({ error: sessionCheck.reason }, { status: 400 })
+      }
 
-    const dailyCheck = await checkDailyLimit(userId, queueEntry.facilityType, queueEntry.date, queueEntry.startTime, queueEntry.duration)
-    if (!dailyCheck.allowed) {
-      return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
-    }
+      const dailyCheck = await checkDailyLimit(userId, queueEntry.facilityType, queueEntry.date, queueEntry.startTime, queueEntry.duration)
+      if (!dailyCheck.allowed) {
+        return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
+      }
 
-    const consecutiveCheck = await checkConsecutiveDays(userId, queueEntry.facilityType, queueEntry.date, queueEntry.startTime)
-    if (!consecutiveCheck.allowed) {
-      return NextResponse.json({ error: consecutiveCheck.reason }, { status: 400 })
+      const consecutiveCheck = await checkConsecutiveDays(userId, queueEntry.facilityType, queueEntry.date, queueEntry.startTime)
+      if (!consecutiveCheck.allowed) {
+        return NextResponse.json({ error: consecutiveCheck.reason }, { status: 400 })
+      }
     }
 
     // Create booking and delete queue entry in transaction

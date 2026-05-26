@@ -110,8 +110,9 @@ export async function expireUnclaimedQueueSlots() {
 export async function releaseWaitlistedSlots() {
   const now = new Date()
 
-  // Target slots starting in 2.5–3.5 hours (catches the hourly cron firing)
-  const windowStart = new Date(now.getTime() + 2.5 * 60 * 60 * 1000)
+  // Notify for any unnotified slot starting in the future within 3.5 hours.
+  // Previously this was a narrow 2.5–3.5h band; widening to the full window ensures
+  // entries created after the band already passed are still caught on the next cron run.
   const windowEnd = new Date(now.getTime() + 3.5 * 60 * 60 * 1000)
 
   // Find unnotified queue entries — we'll filter by slot time in code
@@ -133,7 +134,7 @@ export async function releaseWaitlistedSlots() {
     const slotDateTime = new Date(entry.date)
     slotDateTime.setHours(h, m, 0, 0)
 
-    if (slotDateTime < windowStart || slotDateTime > windowEnd) continue
+    if (slotDateTime <= now || slotDateTime > windowEnd) continue
 
     // Only release if the slot is still genuinely available
     const availability = await isSlotAvailable(

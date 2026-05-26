@@ -44,6 +44,12 @@ export default function ManagerBookingsPage() {
   const [notifyUser, setNotifyUser] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
 
+  useEffect(() => {
+    if (session && (session.user as any)?.role === "MANAGER") {
+      fetchBookings()
+    }
+  }, [dateFilter, facilityFilter, session])
+
   if (status === "loading") {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -61,10 +67,6 @@ export default function ManagerBookingsPage() {
   if (!isManager) {
     redirect("/")
   }
-
-  useEffect(() => {
-    fetchBookings()
-  }, [dateFilter, facilityFilter])
 
   const fetchBookings = async () => {
     try {

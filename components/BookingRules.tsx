@@ -1,4 +1,4 @@
-import { Clock, Calendar, Users, Dumbbell, Ban, ListOrdered, AlertCircle } from "lucide-react"
+import { Clock, Calendar, Users, Ban, ListOrdered, AlertCircle, Zap } from "lucide-react"
 
 function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
@@ -48,12 +48,18 @@ export function BookingRules() {
       {/* Personal limits */}
       <Section icon={<AlertCircle className="w-5 h-5" />} title="Your Personal Limits">
         <p className="text-xs text-on-surface-variant mb-3">
-          These limits apply separately to Gym and Sauna. Hitting any limit shows the slot as <strong>Limit reached</strong> — you can still click it to join the waitlist.
+          These limits apply separately to Gym and Sauna. Slots where you've hit a limit show as <strong>Limit reached</strong> — you can still click them to join the waitlist.
         </p>
-        <div className="bg-surface-container-low rounded-lg px-4">
+        <div className="bg-surface-container-low rounded-lg px-4 mb-3">
           <Limit label="Upcoming sessions" value="Max 3 per facility" />
           <Limit label="Time per day" value="Max 1 hour per facility" />
           <Limit label="Consecutive days" value="Same start time 2 days in a row — not allowed" />
+        </div>
+        <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+          <Zap className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700">
+            <strong>Within 3 hours of a session</strong>, all personal limits are waived — you can book directly even if you'd normally be blocked.
+          </p>
         </div>
       </Section>
 
@@ -64,9 +70,7 @@ export function BookingRules() {
             <p className="text-sm font-semibold text-primary mb-1">Shared Gym</p>
             <ul className="space-y-1.5">
               <Rule>Max <strong>2 people</strong> at the same time</Rule>
-              <Rule>Select which equipment you'll use (up to 3 items)</Rule>
-              <Rule>Each piece of equipment can only be booked by one person per slot</Rule>
-              <Rule>Need more than 3 pieces? Book a <strong>Private Gym</strong> session instead</Rule>
+              <Rule>Select which equipment you'll use — up to <strong>3 items</strong> per session</Rule>
             </ul>
           </div>
           <div className="rounded-lg bg-surface-container-low p-4">
@@ -89,7 +93,7 @@ export function BookingRules() {
       <Section icon={<Ban className="w-5 h-5" />} title="Cancellations">
         <ul className="space-y-2">
           <Rule>You can cancel any time up to <strong>30 minutes before</strong> the start time</Rule>
-          <Rule>Cancellations are <strong>not allowed</strong> within 30 minutes of start or once the session has begun</Rule>
+          <Rule>Cancellations are <strong>not allowed</strong> within 30 minutes of start</Rule>
           <Rule>When you cancel, the first person in the queue is automatically notified</Rule>
         </ul>
       </Section>
@@ -97,15 +101,14 @@ export function BookingRules() {
       {/* Queue */}
       <Section icon={<ListOrdered className="w-5 h-5" />} title="Queue & Waitlist">
         <p className="text-xs text-on-surface-variant mb-3">
-          Join the queue when a slot is fully booked, or join the waitlist when you've hit your personal limits.
+          You can join the queue when a slot is full, or when you've hit your personal limits and the session is more than 3 hours away.
         </p>
-        <ol className="space-y-2">
+        <ol className="space-y-2 mb-3">
           {[
             "When someone cancels, the first person in the queue is notified by email",
-            "You have 30 minutes to claim the slot",
-            "If you don't claim it, the next person is notified",
-            "People who are free to book (not limit-blocked) are prioritised over waitlisted users",
-            "If a slot is still open 3 hours before the session, it's automatically released to the first person in the queue",
+            "You have 30 minutes to claim the slot before the next person is notified",
+            "Users not blocked by personal limits are prioritised over limit-blocked users",
+            "If a slot is still open within 3 hours of the session, it's automatically offered to the first person in the queue",
           ].map((step, i) => (
             <li key={i} className="flex items-start gap-3 text-sm text-on-surface-variant">
               <span className="w-5 h-5 rounded-full bg-secondary/20 text-secondary font-bold text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -115,6 +118,12 @@ export function BookingRules() {
             </li>
           ))}
         </ol>
+        <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+          <Zap className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700">
+            <strong>Within 3 hours</strong>, the 30-minute claim window is waived and personal limits don't apply — you can claim directly even if you're normally limit-blocked.
+          </p>
+        </div>
       </Section>
 
       {/* Registration */}

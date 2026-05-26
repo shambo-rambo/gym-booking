@@ -173,10 +173,6 @@ export async function isSlotAvailable(
     if (distinctUsers >= 2) {
       return { allowed: false, reason: "Gym is full (2 people max)." }
     }
-    const equipmentTaken = overlapping.some(b => b.equipmentType === equipmentType)
-    if (equipmentTaken) {
-      return { allowed: false, reason: "This equipment is already booked." }
-    }
   }
 
   return { allowed: true }

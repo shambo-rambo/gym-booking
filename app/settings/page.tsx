@@ -17,6 +17,7 @@ interface UserSettings {
   phoneNumber: string | null
   notificationPreference: string
   apartmentNumber: number
+  hasPassword: boolean
 }
 
 export default function SettingsPage() {
@@ -36,6 +37,13 @@ export default function SettingsPage() {
   const [savingProfile, setSavingProfile] = useState(false)
   const [profileError, setProfileError] = useState("")
   const [profileSuccess, setProfileSuccess] = useState("")
+
+  const [currentPw, setCurrentPw] = useState("")
+  const [newPw, setNewPw] = useState("")
+  const [confirmPw, setConfirmPw] = useState("")
+  const [savingPassword, setSavingPassword] = useState(false)
+  const [passwordError, setPasswordError] = useState("")
+  const [passwordSuccess, setPasswordSuccess] = useState("")
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -83,6 +91,37 @@ export default function SettingsPage() {
       setProfileError("An error occurred. Please try again.")
     } finally {
       setSavingProfile(false)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    setPasswordError("")
+    setPasswordSuccess("")
+    if (newPw !== confirmPw) {
+      setPasswordError("New passwords do not match")
+      return
+    }
+    setSavingPassword(true)
+    try {
+      const response = await fetch("/api/user/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw })
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setPasswordError(data.error || "Failed to change password")
+        return
+      }
+      setCurrentPw("")
+      setNewPw("")
+      setConfirmPw("")
+      setPasswordSuccess("Password changed successfully!")
+      setTimeout(() => setPasswordSuccess(""), 3000)
+    } catch {
+      setPasswordError("An error occurred. Please try again.")
+    } finally {
+      setSavingPassword(false)
     }
   }
 
@@ -193,6 +232,61 @@ export default function SettingsPage() {
               </Button>
             </CardContent>
           </Card>
+
+          {/* Change Password — credential accounts only */}
+          {settings?.hasPassword && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Change Password</CardTitle>
+                <CardDescription>Update your password</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="currentPw">Current password</Label>
+                  <Input
+                    id="currentPw"
+                    type="password"
+                    value={currentPw}
+                    onChange={(e) => setCurrentPw(e.target.value)}
+                    placeholder="Enter current password"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="newPw">New password</Label>
+                  <Input
+                    id="newPw"
+                    type="password"
+                    value={newPw}
+                    onChange={(e) => setNewPw(e.target.value)}
+                    placeholder="At least 8 characters"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPw">Confirm new password</Label>
+                  <Input
+                    id="confirmPw"
+                    type="password"
+                    value={confirmPw}
+                    onChange={(e) => setConfirmPw(e.target.value)}
+                    placeholder="Repeat new password"
+                  />
+                </div>
+                {passwordError && (
+                  <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+                    {passwordError}
+                  </div>
+                )}
+                {passwordSuccess && (
+                  <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-700">
+                    {passwordSuccess}
+                  </div>
+                )}
+                <Button onClick={handleChangePassword} disabled={savingPassword} className="w-full">
+                  {savingPassword ? "Saving..." : "Change Password"}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Notification Preferences */}
           <Card>

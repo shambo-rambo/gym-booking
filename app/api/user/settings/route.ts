@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
         name: true,
         phoneNumber: true,
         notificationPreference: true,
-        apartmentNumber: true
+        apartmentNumber: true,
+        password: true
       }
     })
 
@@ -42,7 +43,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    return NextResponse.json(user)
+    const { password, ...rest } = user
+    return NextResponse.json({ ...rest, hasPassword: !!password })
 
   } catch (error) {
     console.error("Get settings error:", error)

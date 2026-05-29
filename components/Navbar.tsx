@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { CalendarDays, BookOpen, Clock, User, Shield, LogOut, Home, BookText } from "lucide-react"
+import { CalendarDays, BookOpen, Clock, User, Shield, LogOut, Home, BookText, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
@@ -43,7 +43,6 @@ export default function Navbar() {
     { href: "/book",       label: "Book",     icon: CalendarDays },
     { href: "/queue",      label: "Waitlist", icon: Clock },
     ...(isManager ? [{ href: "/manager", label: "Admin", icon: Shield }] : []),
-    { href: "/settings",   label: "Profile",  icon: User },
   ]
 
   if (!session) {
@@ -104,6 +103,14 @@ export default function Navbar() {
                   <p className="text-xs font-bold text-primary truncate">{session.user?.name}</p>
                   <p className="text-[11px] text-on-surface-variant truncate">{session.user?.email}</p>
                 </div>
+                <Link
+                  href="/settings"
+                  onClick={() => setShowSignOut(false)}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors"
+                >
+                  <Settings className="w-4 h-4" />
+                  Settings
+                </Link>
                 <Link
                   href="/rules"
                   onClick={() => setShowSignOut(false)}

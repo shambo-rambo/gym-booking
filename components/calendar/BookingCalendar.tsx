@@ -19,7 +19,7 @@ interface BookingCalendarProps {
 }
 
 const ALL_SLOTS = [
-  "05:00","05:30","06:00","06:30","07:00","07:30",
+  "06:00","06:30","07:00","07:30",
   "08:00","08:30","09:00","09:30","10:00","10:30",
   "11:00","11:30","12:00","12:30","13:00","13:30",
   "14:00","14:30","15:00","15:30","16:00","16:30",
@@ -212,7 +212,7 @@ export function BookingCalendar({
         const [h, m] = time.split(":").map(Number)
         if (h * 60 + m <= nowMinutes) return false
       }
-      if (timeFilter === "morning")   return time >= "05:00" && time <= "11:30"
+      if (timeFilter === "morning")   return time >= "06:00" && time <= "11:30"
       if (timeFilter === "afternoon") return time >= "12:00" && time <= "16:30"
       if (timeFilter === "evening")   return time >= "17:00" && time <= "22:30"
       return true

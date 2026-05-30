@@ -203,8 +203,8 @@ export function validateBookingTime(
 
   const [hours, minutes] = startTime.split(':').map(Number)
 
-  if (hours < 5) {
-    return { allowed: false, reason: "Facilities open at 5:00 AM." }
+  if (hours < 6) {
+    return { allowed: false, reason: "Facilities open at 6:00 AM." }
   }
 
   const endMinutes = hours * 60 + minutes + duration

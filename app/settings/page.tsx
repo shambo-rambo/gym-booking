@@ -303,23 +303,9 @@ export default function SettingsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="EMAIL_ONLY">Email only</SelectItem>
-                    <SelectItem value="SMS_ONLY">SMS only</SelectItem>
-                    <SelectItem value="EMAIL_AND_SMS">Email and SMS</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {(notificationPreference === "SMS_ONLY" || notificationPreference === "EMAIL_AND_SMS") && (
-                <div className="space-y-2">
-                  <Label htmlFor="phoneNumber">Phone number</Label>
-                  <Input
-                    id="phoneNumber"
-                    type="tel"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    placeholder="+1 555 000 0000"
-                  />
-                </div>
-              )}
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
                   {error}

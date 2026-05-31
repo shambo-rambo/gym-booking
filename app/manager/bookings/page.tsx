@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
-import { Calendar, Clock, User, Home, Mail, XCircle, Dumbbell, Waves } from "lucide-react"
+import { Calendar, Clock, User, Home, Mail, XCircle, Dumbbell, Waves, BookOpen } from "lucide-react"
 import { format } from "date-fns"
 import { EQUIPMENT_LABELS, formatBookingType } from "@/lib/equipment"
 import { EquipmentType } from "@prisma/client"
@@ -177,6 +177,7 @@ export default function ManagerBookingsPage() {
                     <SelectItem value="ALL">All Facilities</SelectItem>
                     <SelectItem value="GYM">Gym</SelectItem>
                     <SelectItem value="SAUNA">Sauna</SelectItem>
+                    <SelectItem value="LIBRARY">Library</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -198,11 +199,13 @@ export default function ManagerBookingsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     {booking.facilityType === "GYM" ? (
                       <Dumbbell className="h-5 w-5 flex-shrink-0" />
+                    ) : booking.facilityType === "LIBRARY" ? (
+                      <BookOpen className="h-5 w-5 flex-shrink-0" />
                     ) : (
                       <Waves className="h-5 w-5 flex-shrink-0" />
                     )}
                     <CardTitle className="text-lg">
-                      {booking.facilityType === "GYM" ? "Gym" : "Sauna"}
+                      {booking.facilityType === "GYM" ? "Gym" : booking.facilityType === "LIBRARY" ? "Library" : "Sauna"}
                     </CardTitle>
                     <Badge variant={booking.bookingType === "EXCLUSIVE" ? "default" : "secondary"}>
                       {formatBookingType(booking.bookingType)}

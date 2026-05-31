@@ -50,6 +50,7 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const registered = searchParams.get("registered")
+  const reset = searchParams.get("reset")
   const authError = searchParams.get("error")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -105,6 +106,11 @@ function LoginForm() {
               Registration received. A manager will approve your account shortly.
             </div>
           )}
+          {reset === "success" && (
+            <div className="text-sm text-green-700 bg-green-50 border border-green-200 rounded p-3">
+              Password updated — you can sign in with your new password.
+            </div>
+          )}
 
           <GoogleButton />
 
@@ -131,7 +137,12 @@ function LoginForm() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link href="/forgot-password" className="text-xs text-blue-600 hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
               <Input
                 id="password"
                 type="password"

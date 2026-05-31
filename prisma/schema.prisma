@@ -26,6 +26,7 @@ model User {
   queueEntries           QueueEntry[]
   blockedSlotsCreated    BlockedSlot[]
   announcementsCreated   Announcement[]
+  passwordResetTokens    PasswordResetToken[]
 
   @@index([apartmentNumber])
   @@index([status])
@@ -136,6 +137,17 @@ model Announcement {
   expiresAt DateTime?
 
   @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model NotificationLog {

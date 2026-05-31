@@ -15,8 +15,7 @@ const registerSchema = z.object({
     message: "That unit number isn't recognised. Please check and try again.",
   }),
   buildingCode: z.string().optional(),
-  phoneNumber: z.string().optional(),
-  notificationPreference: z.enum(["EMAIL_ONLY", "SMS_ONLY", "BOTH"]),
+  notificationPreference: z.enum(["EMAIL_ONLY", "SMS_ONLY", "BOTH"]).default("EMAIL_ONLY"),
 })
 
 function escapeHtml(str: string): string {
@@ -56,27 +55,6 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (validatedData.phoneNumber) {
-      const phoneRegex = /^\+61\d{9}$/
-      if (!phoneRegex.test(validatedData.phoneNumber)) {
-        return NextResponse.json(
-          { success: false, message: "Invalid Australian phone number format. Use +61XXXXXXXXX" },
-          { status: 400 }
-        )
-      }
-    }
-
-    if (
-      (validatedData.notificationPreference === "SMS_ONLY" ||
-        validatedData.notificationPreference === "BOTH") &&
-      !validatedData.phoneNumber
-    ) {
-      return NextResponse.json(
-        { success: false, message: "Phone number is required for SMS notifications" },
-        { status: 400 }
-      )
-    }
-
     const buildingCode = process.env.BUILDING_CODE
     const codeCorrect =
       buildingCode &&
@@ -92,41 +70,42 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         name: validatedData.name,
         apartmentNumber: validatedData.apartmentNumber,
-        phoneNumber: validatedData.phoneNumber,
-        notificationPreference: validatedData.notificationPreference,
+        notificationPreference: "EMAIL_ONLY",
         status,
         role: "RESIDENT",
       },
     })
 
-    // Only notify managers if the account needs approval
-    if (status === "PENDING") {
-      const managers = await prisma.user.findMany({
-        where: { role: "MANAGER" },
-        select: { email: true },
-      })
+    // Notify managers of all new registrations
+    const managers = await prisma.user.findMany({
+      where: { role: "MANAGER" },
+      select: { email: true },
+    })
 
-      if (resend && managers.length > 0) {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-        await resend.emails
-          .send({
-            from: process.env.RESEND_FROM_EMAIL || "Gym Booking <onboarding@resend.dev>",
-            to: managers.map((m) => m.email),
-            subject: "New resident registration pending approval",
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #4F46E5;">New registration pending approval</h2>
-                <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 5px 0;"><strong>Name:</strong> ${escapeHtml(user.name)}</p>
-                  <p style="margin: 5px 0;"><strong>Email:</strong> ${escapeHtml(user.email)}</p>
-                  <p style="margin: 5px 0;"><strong>Unit:</strong> ${user.apartmentNumber}</p>
-                </div>
-                <a href="${appUrl}/manager/users" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">Review in Manager Dashboard</a>
+    if (resend && managers.length > 0) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      const isPending = status === "PENDING"
+      await resend.emails
+        .send({
+          from: process.env.RESEND_FROM_EMAIL || "Gym Booking <onboarding@resend.dev>",
+          to: managers.map((m) => m.email),
+          subject: isPending
+            ? "New resident registration pending approval"
+            : "New resident registered",
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #4F46E5;">${isPending ? "New registration pending approval" : "New resident registered"}</h2>
+              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Name:</strong> ${escapeHtml(user.name)}</p>
+                <p style="margin: 5px 0;"><strong>Email:</strong> ${escapeHtml(user.email)}</p>
+                <p style="margin: 5px 0;"><strong>Unit:</strong> ${user.apartmentNumber}</p>
+                <p style="margin: 5px 0;"><strong>Status:</strong> ${isPending ? "Pending approval" : "Auto-verified"}</p>
               </div>
-            `,
-          })
-          .catch((err) => console.error("[Email] Failed to notify managers:", err))
-      }
+              <a href="${appUrl}/manager/users" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">View in Manager Dashboard</a>
+            </div>
+          `,
+        })
+        .catch((err) => console.error("[Email] Failed to notify managers:", err))
     }
 
     return NextResponse.json({

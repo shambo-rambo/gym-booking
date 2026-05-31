@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    await prisma.user.create({
+    const newUser = await prisma.user.create({
       data: {
         email: session.user.email,
         name: session.user.name ?? session.user.email.split("@")[0],
@@ -88,6 +88,36 @@ export async function POST(request: NextRequest) {
         role: "RESIDENT",
       },
     })
+
+    const managers = await prisma.user.findMany({
+      where: { role: "MANAGER" },
+      select: { email: true },
+    })
+
+    if (resend && managers.length > 0) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+      const safeName = newUser.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+      const safeEmail = newUser.email.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+      await resend.emails
+        .send({
+          from: process.env.RESEND_FROM_EMAIL || "Gym Booking <onboarding@resend.dev>",
+          to: managers.map((m) => m.email),
+          subject: "New resident registered",
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #4F46E5;">New resident registered</h2>
+              <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 5px 0;"><strong>Name:</strong> ${safeName}</p>
+                <p style="margin: 5px 0;"><strong>Email:</strong> ${safeEmail}</p>
+                <p style="margin: 5px 0;"><strong>Unit:</strong> ${newUser.apartmentNumber}</p>
+                <p style="margin: 5px 0;"><strong>Status:</strong> Auto-verified (Google sign-in)</p>
+              </div>
+              <a href="${appUrl}/manager/users" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">View in Manager Dashboard</a>
+            </div>
+          `,
+        })
+        .catch((err) => console.error("[Email] Failed to notify managers:", err))
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

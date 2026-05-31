@@ -22,8 +22,6 @@ function RegisterForm() {
     name: "",
     apartmentNumber: "",
     buildingCode: codeFromUrl,
-    phoneNumber: "",
-    notificationPreference: "EMAIL_ONLY" as "EMAIL_ONLY" | "SMS_ONLY" | "BOTH",
   })
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -46,12 +44,6 @@ function RegisterForm() {
       return
     }
 
-    if (formData.notificationPreference !== "EMAIL_ONLY" && !formData.phoneNumber) {
-      setError("Phone number is required for SMS notifications")
-      setLoading(false)
-      return
-    }
-
     try {
       const response = await fetch("/api/auth/register", {
         method: "POST",
@@ -59,6 +51,7 @@ function RegisterForm() {
         body: JSON.stringify({
           ...formData,
           apartmentNumber: aptNum,
+          notificationPreference: "EMAIL_ONLY",
         }),
       })
 
@@ -174,41 +167,6 @@ function RegisterForm() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="phoneNumber">Phone number <span className="text-gray-400 font-normal">(optional)</span></Label>
-              <Input
-                id="phoneNumber"
-                type="tel"
-                placeholder="+61400000000"
-                value={formData.phoneNumber}
-                onChange={(e) => {
-                  let val = e.target.value.replace(/[^\d+]/g, "")
-                  if (val.startsWith("0")) val = "+61" + val.slice(1)
-                  else if (val.length > 0 && !val.startsWith("+")) val = "+61" + val
-                  setFormData({ ...formData, phoneNumber: val })
-                }}
-              />
-              <p className="text-xs text-gray-500">Australian mobile (+61XXXXXXXXX), for SMS reminders only.</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="notificationPreference">Notifications</Label>
-              <select
-                id="notificationPreference"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={formData.notificationPreference}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    notificationPreference: e.target.value as "EMAIL_ONLY" | "SMS_ONLY" | "BOTH",
-                  })
-                }
-              >
-                <option value="EMAIL_ONLY">Email only</option>
-                <option value="SMS_ONLY">SMS only</option>
-                <option value="BOTH">Email and SMS</option>
-              </select>
-            </div>
 
             {error && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">

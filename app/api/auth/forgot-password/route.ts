@@ -20,8 +20,30 @@ export async function POST(request: NextRequest) {
       select: { id: true, name: true, password: true },
     })
 
-    if (user?.password) {
-      // Delete any existing tokens for this user
+    if (user && !user.password) {
+      // Google sign-in account — no password exists, let them know
+      if (resend) {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+        await resend.emails
+          .send({
+            from: process.env.RESEND_FROM_EMAIL || "Gym Booking <onboarding@resend.dev>",
+            to: email,
+            subject: "Sign in with Google",
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #4F46E5;">Your account uses Google sign-in</h2>
+                <p>Hi ${user.name.replace(/</g, "&lt;")},</p>
+                <p>You requested a password reset, but your account is linked to Google — there's no password to reset.</p>
+                <p>Head back and use the "Continue with Google" button to sign in.</p>
+                <a href="${appUrl}/login" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 16px 0;">Go to sign in</a>
+                <p style="color: #6b7280; font-size: 14px;">If you didn't request this, you can safely ignore this email.</p>
+              </div>
+            `,
+          })
+          .catch((err) => console.error("[Email] Failed to send Google account notice:", err))
+      }
+    } else if (user?.password) {
+      // Credentials account — generate reset token
       await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } })
 
       const rawToken = crypto.randomBytes(32).toString("hex")

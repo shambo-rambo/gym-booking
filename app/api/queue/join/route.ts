@@ -9,7 +9,7 @@ import { parseLocalDate } from "@/lib/date-utils"
 export const dynamic = 'force-dynamic'
 
 const joinQueueSchema = z.object({
-  facilityType: z.enum(["GYM", "SAUNA"]),
+  facilityType: z.enum(["GYM", "SAUNA", "LIBRARY"]),
   bookingType: z.enum(["EXCLUSIVE", "SHARED"]),
   equipmentType: z.enum([
     "WEIGHTS_MACHINE",
@@ -20,7 +20,7 @@ const joinQueueSchema = z.object({
   ]).optional(),
   date: z.string(),
   startTime: z.string(),
-  duration: z.number().refine(d => d === 30 || d === 60)
+  duration: z.number().positive().int()
 })
 
 export async function POST(request: NextRequest) {
@@ -61,6 +61,15 @@ export async function POST(request: NextRequest) {
     } = validatedData
 
     const date = parseLocalDate(dateStr)
+    const isLibrary = facilityType === "LIBRARY"
+
+    // Duration must be 30 or 60 for gym/sauna; library allows any positive duration
+    if (!isLibrary && duration !== 30 && duration !== 60) {
+      return NextResponse.json(
+        { error: "Duration must be 30 or 60 minutes." },
+        { status: 400 }
+      )
+    }
 
     // Validate equipment type for shared gym
     if (
@@ -74,43 +83,61 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const resolvedBookingType = isLibrary ? BookingType.EXCLUSIVE : bookingType as BookingType
+    const resolvedEquipmentType = isLibrary ? null : equipmentType as EquipmentType || null
+
     // Check if slot is physically available (not full)
     const slotAvailability = await isSlotAvailable(
       facilityType as FacilityType,
-      bookingType as BookingType,
-      equipmentType as EquipmentType || null,
+      resolvedBookingType,
+      resolvedEquipmentType,
       date,
       startTime,
       duration
     )
 
-    // Check booking rules for this user
-    const sessionCheck = await checkSessionLimit(userId, facilityType as FacilityType)
-    const dailyCheck = await checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration)
-    const consecutiveCheck = await checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime)
-    const antiHoardingCheck = sessionCheck.allowed && dailyCheck.allowed && consecutiveCheck.allowed
-      ? { allowed: true }
-      : { allowed: false, reason: sessionCheck.reason ?? dailyCheck.reason ?? consecutiveCheck.reason }
+    let canUserBook = true
 
-    const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - Date.now()) / (1000 * 60)
-    const isLastMinute = minutesUntilSlot <= 180
+    if (isLibrary) {
+      // Library has no booking limits — if the slot is free, book directly
+      if (slotAvailability.allowed) {
+        return NextResponse.json(
+          { error: "Library is available. Please book it directly." },
+          { status: 400 }
+        )
+      }
+    } else {
+      // Check booking rules for gym/sauna
+      const [sessionCheck, dailyCheck, consecutiveCheck] = await Promise.all([
+        checkSessionLimit(userId, facilityType as FacilityType),
+        checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration),
+        checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime),
+      ])
+      const antiHoardingCheck = sessionCheck.allowed && dailyCheck.allowed && consecutiveCheck.allowed
+        ? { allowed: true }
+        : { allowed: false, reason: sessionCheck.reason ?? dailyCheck.reason ?? consecutiveCheck.reason }
+      canUserBook = antiHoardingCheck.allowed
 
-    // Within 3 hours: anti-hoarding is bypassed, so if the slot is physically available
-    // the user should book directly rather than queue
-    if (isLastMinute && slotAvailability.allowed) {
-      return NextResponse.json(
-        { error: "This slot is available to book directly — booking limits don't apply within 3 hours of the session." },
-        { status: 400 }
-      )
-    }
+      const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - Date.now()) / (1000 * 60)
+      const isLastMinute = minutesUntilSlot <= 180
 
-    // Only prevent queue join if BOTH slot is available AND user passes anti-hoarding
-    // If slot is full OR user is blocked by anti-hoarding, allow queue join
-    if (slotAvailability.allowed && antiHoardingCheck.allowed) {
-      return NextResponse.json(
-        { error: "This slot is available. Please book it directly instead of joining the queue." },
-        { status: 400 }
-      )
+      // Within 3 hours: anti-hoarding is bypassed, so if the slot is physically available
+      // the user should book directly rather than queue
+      if (isLastMinute && slotAvailability.allowed) {
+        return NextResponse.json(
+          { error: "This slot is available to book directly — booking limits don't apply within 3 hours of the session." },
+          { status: 400 }
+        )
+      }
+
+      // Only prevent queue join if BOTH slot is available AND user passes anti-hoarding
+      // If slot is full OR user is blocked by anti-hoarding, allow queue join
+      if (slotAvailability.allowed && antiHoardingCheck.allowed) {
+        return NextResponse.json(
+          { error: "This slot is available. Please book it directly instead of joining the queue." },
+          { status: 400 }
+        )
+      }
     }
 
     // Check if user already in queue for this exact slot
@@ -118,8 +145,8 @@ export async function POST(request: NextRequest) {
       where: {
         userId,
         facilityType: facilityType as FacilityType,
-        bookingType: bookingType as BookingType,
-        equipmentType: equipmentType as EquipmentType || null,
+        bookingType: resolvedBookingType,
+        equipmentType: resolvedEquipmentType,
         date,
         startTime,
         duration
@@ -133,18 +160,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Check if user already has a booking at this time
-    const existingBooking = await prisma.booking.findFirst({
-      where: {
-        userId,
-        facilityType: facilityType as FacilityType,
-        date,
-        startTime,
-        duration
-      }
+    // Check if user already has a booking overlapping this time
+    const existingBookings = await prisma.booking.findMany({
+      where: { userId, facilityType: facilityType as FacilityType, date }
     })
 
-    if (existingBooking) {
+    const reqStart = parseInt(startTime.split(':')[0]) * 60 + parseInt(startTime.split(':')[1])
+    const reqEnd = reqStart + duration
+
+    const alreadyBooked = existingBookings.some(b => {
+      const [bh, bm] = b.startTime.split(':').map(Number)
+      const bStart = bh * 60 + bm
+      return bStart < reqEnd && bStart + b.duration > reqStart
+    })
+
+    if (alreadyBooked) {
       return NextResponse.json(
         { error: "You already have a booking at this time" },
         { status: 400 }
@@ -156,8 +186,8 @@ export async function POST(request: NextRequest) {
     const allQueueEntries = await prisma.queueEntry.findMany({
       where: {
         facilityType: facilityType as FacilityType,
-        bookingType: bookingType as BookingType,
-        equipmentType: equipmentType as EquipmentType || null,
+        bookingType: resolvedBookingType,
+        equipmentType: resolvedEquipmentType,
         date,
         startTime,
         duration
@@ -166,20 +196,24 @@ export async function POST(request: NextRequest) {
     })
 
     let newPosition
-    const canUserBook = antiHoardingCheck.allowed
 
     if (canUserBook) {
       // User CAN book - find the last position among users who can also book
       // They should be ahead of users who are blocked by anti-hoarding
       let lastCanBookPosition = 0
 
-      for (const entry of allQueueEntries) {
-        const entrySession = await checkSessionLimit(entry.userId, facilityType as FacilityType)
-        const entryDaily = await checkDailyLimit(entry.userId, facilityType as FacilityType, date, startTime, duration)
-        const entryConsecutive = await checkConsecutiveDays(entry.userId, facilityType as FacilityType, date, startTime)
-        if (entrySession.allowed && entryDaily.allowed && entryConsecutive.allowed) {
-          lastCanBookPosition = entry.position
+      if (!isLibrary) {
+        for (const entry of allQueueEntries) {
+          const entrySession = await checkSessionLimit(entry.userId, facilityType as FacilityType)
+          const entryDaily = await checkDailyLimit(entry.userId, facilityType as FacilityType, date, startTime, duration)
+          const entryConsecutive = await checkConsecutiveDays(entry.userId, facilityType as FacilityType, date, startTime)
+          if (entrySession.allowed && entryDaily.allowed && entryConsecutive.allowed) {
+            lastCanBookPosition = entry.position
+          }
         }
+      } else {
+        // For library all users can book, so just go to end
+        lastCanBookPosition = allQueueEntries[allQueueEntries.length - 1]?.position ?? 0
       }
 
       newPosition = lastCanBookPosition + 1
@@ -195,8 +229,8 @@ export async function POST(request: NextRequest) {
       await prisma.queueEntry.updateMany({
         where: {
           facilityType: facilityType as FacilityType,
-          bookingType: bookingType as BookingType,
-          equipmentType: equipmentType as EquipmentType || null,
+          bookingType: resolvedBookingType,
+          equipmentType: resolvedEquipmentType,
           date,
           startTime,
           duration,
@@ -213,8 +247,8 @@ export async function POST(request: NextRequest) {
       data: {
         userId,
         facilityType: facilityType as FacilityType,
-        bookingType: bookingType as BookingType,
-        equipmentType: equipmentType as EquipmentType || null,
+        bookingType: resolvedBookingType,
+        equipmentType: resolvedEquipmentType,
         date,
         startTime,
         duration,

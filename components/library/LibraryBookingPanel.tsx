@@ -59,6 +59,9 @@ export function LibraryBookingPanel({ onBooked }: LibraryBookingPanelProps) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [clashData, setClashData] = useState<{ startTime: string; duration: number } | null>(null)
+  const [joiningWaitlist, setJoiningWaitlist] = useState(false)
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false)
   const [dateOffset, setDateOffset] = useState(0) // for carousel paging on mobile
 
   const DAYS_SHOWN = 8
@@ -80,6 +83,8 @@ export function LibraryBookingPanel({ onBooked }: LibraryBookingPanelProps) {
     fetchSchedule()
     setError(null)
     setSuccess(false)
+    setClashData(null)
+    setWaitlistSuccess(false)
   }, [fetchSchedule])
 
   // Clamp endTime to always be after startTime
@@ -97,6 +102,8 @@ export function LibraryBookingPanel({ onBooked }: LibraryBookingPanelProps) {
     setSubmitting(true)
     setError(null)
     setSuccess(false)
+    setClashData(null)
+    setWaitlistSuccess(false)
     try {
       const res = await fetch("/api/bookings/create", {
         method: "POST",
@@ -111,6 +118,9 @@ export function LibraryBookingPanel({ onBooked }: LibraryBookingPanelProps) {
       const data = await res.json()
       if (!res.ok) {
         setError(data.error || "Failed to create booking")
+        if (res.status === 409) {
+          setClashData({ startTime, duration: durationMins })
+        }
       } else {
         setSuccess(true)
         fetchSchedule()
@@ -118,6 +128,34 @@ export function LibraryBookingPanel({ onBooked }: LibraryBookingPanelProps) {
       }
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const handleJoinWaitlist = async () => {
+    if (!clashData) return
+    setJoiningWaitlist(true)
+    try {
+      const res = await fetch("/api/queue/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          facilityType: "LIBRARY",
+          bookingType: "EXCLUSIVE",
+          date: dateStr,
+          startTime: clashData.startTime,
+          duration: clashData.duration,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || "Failed to join waitlist")
+      } else {
+        setClashData(null)
+        setError(null)
+        setWaitlistSuccess(true)
+      }
+    } finally {
+      setJoiningWaitlist(false)
     }
   }
 
@@ -198,6 +236,21 @@ export function LibraryBookingPanel({ onBooked }: LibraryBookingPanelProps) {
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm text-red-700">
             {error}
+            {clashData && (
+              <button
+                onClick={handleJoinWaitlist}
+                disabled={joiningWaitlist}
+                className="mt-2 w-full rounded-lg bg-red-100 hover:bg-red-200 px-3 py-1.5 text-sm font-medium text-red-800 transition-colors"
+              >
+                {joiningWaitlist ? "Joining waitlist…" : "Join Waitlist"}
+              </button>
+            )}
+          </div>
+        )}
+
+        {waitlistSuccess && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-sm text-amber-800 font-medium">
+            You're on the waitlist. We'll notify you if this slot becomes available.
           </div>
         )}
 

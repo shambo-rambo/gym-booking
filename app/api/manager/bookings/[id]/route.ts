@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { sendNotification } from "@/lib/notifications"
-import { notifyNextInQueue } from "@/lib/queue-notifications"
+import { notifyNextInQueue, notifyLibraryQueueAfterCancellation } from "@/lib/queue-notifications"
 import { format } from "date-fns"
 import { z } from "zod"
 
@@ -63,14 +63,18 @@ export async function DELETE(
     }
 
     // Check if anyone is queued for this slot and notify them
-    await notifyNextInQueue(
-      booking.facilityType,
-      booking.bookingType,
-      booking.equipmentType,
-      booking.date,
-      booking.startTime,
-      booking.duration
-    )
+    if (booking.facilityType === "LIBRARY") {
+      await notifyLibraryQueueAfterCancellation(booking.date)
+    } else {
+      await notifyNextInQueue(
+        booking.facilityType,
+        booking.bookingType,
+        booking.equipmentType,
+        booking.date,
+        booking.startTime,
+        booking.duration
+      )
+    }
 
     return NextResponse.json({
       success: true,

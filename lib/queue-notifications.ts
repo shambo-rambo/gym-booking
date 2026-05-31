@@ -163,3 +163,43 @@ export async function releaseWaitlistedSlots() {
 
   return releasedCount
 }
+
+/**
+ * After a library booking is cancelled, notify any queued users whose desired
+ * time window is now free. Walks unique startTime+duration combos in the queue
+ * for that date and calls notifyNextInQueue for each slot that became available.
+ */
+export async function notifyLibraryQueueAfterCancellation(date: Date) {
+  const entries = await prisma.queueEntry.findMany({
+    where: { facilityType: FacilityType.LIBRARY, date, notifiedAt: null },
+    orderBy: { position: 'asc' },
+  })
+
+  const checked = new Set<string>()
+
+  for (const entry of entries) {
+    const key = `${entry.startTime}|${entry.duration}`
+    if (checked.has(key)) continue
+    checked.add(key)
+
+    const availability = await isSlotAvailable(
+      FacilityType.LIBRARY,
+      BookingType.EXCLUSIVE,
+      null,
+      date,
+      entry.startTime,
+      entry.duration
+    )
+
+    if (availability.allowed) {
+      await notifyNextInQueue(
+        FacilityType.LIBRARY,
+        BookingType.EXCLUSIVE,
+        null,
+        date,
+        entry.startTime,
+        entry.duration
+      )
+    }
+  }
+}

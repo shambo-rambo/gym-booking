@@ -272,7 +272,6 @@ export default function WaitlistPage() {
             <li>When someone cancels, the first person on the waitlist gets notified</li>
             <li>You have 30 minutes to claim the slot</li>
             <li>If you don't claim it, the next person gets notified</li>
-            <li>This page auto-refreshes every 30 seconds</li>
           </ul>
         </div>
       </main>

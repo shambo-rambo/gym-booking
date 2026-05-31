@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     const date = parseLocalDate(dateStr)
 
-    // ── Library booking (open start/end, no capacity rules) ──────────────────
+    // ── Library booking (open start/end, exclusive, one at a time) ──────────
     if (facilityType === "LIBRARY") {
       if (!endTime) {
         return NextResponse.json({ error: "End time is required for library bookings." }, { status: 400 })
@@ -94,21 +94,38 @@ export async function POST(request: NextRequest) {
 
       const [sh, sm] = startTime.split(':').map(Number)
       const [eh, em] = endTime.split(':').map(Number)
-      const duration = (eh * 60 + em) - (sh * 60 + sm)
+      const newStart = sh * 60 + sm
+      const newEnd = eh * 60 + em
+      const duration = newEnd - newStart
 
       try {
-        const booking = await prisma.booking.create({
-          data: {
-            userId,
-            facilityType: FacilityType.LIBRARY,
-            bookingType: BookingType.EXCLUSIVE,
-            date,
-            startTime,
-            endTime,
-            duration,
-          },
-          include: { user: { select: { name: true, email: true } } },
-        })
+        const booking = await prisma.$transaction(async (tx) => {
+          const existing = await tx.booking.findMany({
+            where: { facilityType: FacilityType.LIBRARY, date },
+          })
+
+          const hasClash = existing.some(b => {
+            const [bh, bm] = b.startTime.split(':').map(Number)
+            const bStart = bh * 60 + bm
+            const bEnd = bStart + b.duration
+            return bStart < newEnd && bEnd > newStart
+          })
+
+          if (hasClash) throw new Error("Library is already booked during this time.")
+
+          return tx.booking.create({
+            data: {
+              userId,
+              facilityType: FacilityType.LIBRARY,
+              bookingType: BookingType.EXCLUSIVE,
+              date,
+              startTime,
+              endTime,
+              duration,
+            },
+            include: { user: { select: { name: true, email: true } } },
+          })
+        }, { maxWait: 5000, timeout: 10000 })
 
         sendNotification(user, 'BOOKING_CONFIRMATION', {
           facilityType: 'Library',
@@ -132,6 +149,9 @@ export async function POST(request: NextRequest) {
           },
         })
       } catch (err: any) {
+        if (err.message === "Library is already booked during this time.") {
+          return NextResponse.json({ error: err.message }, { status: 409 })
+        }
         console.error("Library booking creation error:", err)
         return NextResponse.json({ error: "Failed to create booking" }, { status: 500 })
       }

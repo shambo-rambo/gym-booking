@@ -60,6 +60,7 @@ model Booking {
   date          DateTime @db.Date
   startTime     String
   duration      Int
+  endTime       String?  // Set only for LIBRARY bookings
 
   createdAt     DateTime @default(now())
 
@@ -71,6 +72,7 @@ model Booking {
 enum FacilityType {
   GYM
   SAUNA
+  LIBRARY
 }
 
 enum EquipmentType {

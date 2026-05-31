@@ -5,29 +5,23 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Navbar from "@/components/Navbar"
 import { BookingCalendar } from "@/components/calendar/BookingCalendar"
+import { LibraryBookingPanel } from "@/components/library/LibraryBookingPanel"
 import { FacilityType, BookingType } from "@prisma/client"
 import { cn } from "@/lib/utils"
 
-type BookingMode = "shared-gym" | "private-gym" | "private-sauna"
+type Amenity = "gym" | "sauna" | "library"
 
-const MODES: { value: BookingMode; label: string }[] = [
-  { value: "shared-gym",    label: "Shared Gym"    },
-  { value: "private-gym",   label: "Private Gym"   },
-  { value: "private-sauna", label: "Private Sauna" },
+const AMENITIES: { value: Amenity; label: string }[] = [
+  { value: "gym",     label: "Gym"     },
+  { value: "sauna",   label: "Sauna"   },
+  { value: "library", label: "Library" },
 ]
-
-function modeToFacility(mode: BookingMode): FacilityType {
-  return mode === "private-sauna" ? FacilityType.SAUNA : FacilityType.GYM
-}
-
-function modeToBookingType(mode: BookingMode): BookingType {
-  return mode === "shared-gym" ? BookingType.SHARED : BookingType.EXCLUSIVE
-}
 
 export default function BookPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [mode, setMode] = useState<BookingMode>("shared-gym")
+  const [amenity, setAmenity] = useState<Amenity>("gym")
+  const [gymBookingType, setGymBookingType] = useState<BookingType>(BookingType.SHARED)
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login")
@@ -40,6 +34,9 @@ export default function BookPage() {
       </div>
     )
   }
+
+  const facilityType = amenity === "sauna" ? FacilityType.SAUNA : FacilityType.GYM
+  const bookingType = amenity === "sauna" ? BookingType.EXCLUSIVE : gymBookingType
 
   return (
     <div className="min-h-screen bg-surface">
@@ -54,13 +51,13 @@ export default function BookPage() {
           </h2>
 
           <div className="flex gap-3 flex-wrap mb-5">
-            {MODES.map(({ value, label }) => (
+            {AMENITIES.map(({ value, label }) => (
               <button
                 key={value}
-                onClick={() => setMode(value)}
+                onClick={() => setAmenity(value)}
                 className={cn(
                   "px-5 py-2.5 rounded-md font-semibold text-sm transition-all active:scale-95",
-                  mode === value
+                  amenity === value
                     ? "bg-primary text-on-primary shadow-card"
                     : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
                 )}
@@ -71,10 +68,45 @@ export default function BookPage() {
           </div>
         </div>
 
-        <BookingCalendar
-          facilityType={modeToFacility(mode)}
-          defaultBookingType={modeToBookingType(mode)}
-        />
+        {amenity === "library" ? (
+          <LibraryBookingPanel />
+        ) : (
+          <>
+            {amenity === "gym" && (
+              <div className="flex items-center gap-2 mb-4">
+                <div className="flex rounded-md overflow-hidden border border-outline-variant">
+                  <button
+                    onClick={() => setGymBookingType(BookingType.SHARED)}
+                    className={cn(
+                      "px-4 py-2 text-sm font-medium transition-colors",
+                      gymBookingType === BookingType.SHARED
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+                    )}
+                  >
+                    Shared
+                  </button>
+                  <button
+                    onClick={() => setGymBookingType(BookingType.EXCLUSIVE)}
+                    className={cn(
+                      "px-4 py-2 text-sm font-medium transition-colors",
+                      gymBookingType === BookingType.EXCLUSIVE
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+                    )}
+                  >
+                    Private
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <BookingCalendar
+              facilityType={facilityType}
+              defaultBookingType={bookingType}
+            />
+          </>
+        )}
       </main>
     </div>
   )

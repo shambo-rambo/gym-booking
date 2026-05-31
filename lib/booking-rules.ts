@@ -220,6 +220,53 @@ export function validateBookingTime(
   return { allowed: true }
 }
 
+// Validate Library booking time (open start/end, no duration constraint)
+export function validateLibraryBookingTime(
+  date: Date,
+  startTime: string,
+  endTime: string
+): ValidationResult {
+  const now = new Date()
+  const slotDateTime = parseSlotDateTime(date, startTime)
+
+  if (slotDateTime < now) {
+    return { allowed: false, reason: "Cannot book a slot in the past." }
+  }
+
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const slotDate = new Date(date)
+  slotDate.setHours(0, 0, 0, 0)
+  const daysDiff = Math.floor((slotDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+  if (daysDiff > 7) {
+    return { allowed: false, reason: "Cannot book more than 7 days in advance." }
+  }
+
+  const [startHours, startMins] = startTime.split(':').map(Number)
+  const [endHours, endMins] = endTime.split(':').map(Number)
+  const startTotal = startHours * 60 + startMins
+  const endTotal = endHours * 60 + endMins
+
+  if (startHours < 6) {
+    return { allowed: false, reason: "Library opens at 6:00 AM." }
+  }
+
+  if (endTotal > 23 * 60) {
+    return { allowed: false, reason: "Library closes at 11:00 PM." }
+  }
+
+  if (endTotal <= startTotal) {
+    return { allowed: false, reason: "End time must be after start time." }
+  }
+
+  if (endTotal - startTotal < 30) {
+    return { allowed: false, reason: "Minimum booking duration is 30 minutes." }
+  }
+
+  return { allowed: true }
+}
+
 // Generate all time slots for a day (5am to 10:30pm in 30-minute intervals)
 export function generateTimeSlots(): string[] {
   const slots: string[] = []

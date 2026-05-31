@@ -19,6 +19,7 @@ interface Booking {
   equipmentType: string | null
   date: string
   startTime: string
+  endTime: string | null
   duration: number
   createdAt: string
 }
@@ -44,6 +45,7 @@ interface BookingSession {
   equipment: (EquipmentType | null)[]
   date: string
   startTime: string
+  endTime: string | null
   duration: number
   createdAt: string
 }
@@ -64,6 +66,7 @@ function groupIntoSessions(bookings: Booking[]): BookingSession[] {
         equipment: [b.equipmentType as EquipmentType | null],
         date: b.date,
         startTime: b.startTime,
+        endTime: b.endTime ?? null,
         duration: b.duration,
         createdAt: b.createdAt,
       })
@@ -210,7 +213,7 @@ export default function HomePage() {
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <p className="font-bold text-primary">
-                          {entry.facilityType === "GYM" ? "Gym" : "Sauna"}
+                          {entry.facilityType === "GYM" ? "Gym" : entry.facilityType === "SAUNA" ? "Sauna" : "Library"}
                           {isNotified && !hasExpired && (
                             <span className="ml-2 text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
                               Slot Available!
@@ -317,15 +320,20 @@ export default function HomePage() {
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <p className="font-bold text-primary">
-                          {s.facilityType === "GYM" ? "Gym" : "Sauna"}
+                          {s.facilityType === "GYM" ? "Gym" : s.facilityType === "SAUNA" ? "Sauna" : "Library"}
                         </p>
                         <p className="text-sm text-on-surface-variant">
-                          {format(new Date(s.date), "EEE, MMM d")} · {s.startTime} ({s.duration} min)
+                          {format(new Date(s.date), "EEE, MMM d")} · {s.startTime}
+                          {s.facilityType === "LIBRARY" && s.endTime
+                            ? ` – ${s.endTime}`
+                            : ` (${s.duration} min)`}
                         </p>
                       </div>
-                      <Badge variant={s.bookingType === "EXCLUSIVE" ? "default" : "secondary"} className="text-xs">
-                        {s.bookingType === "EXCLUSIVE" ? "Private" : "Shared"}
-                      </Badge>
+                      {s.facilityType !== "LIBRARY" && (
+                        <Badge variant={s.bookingType === "EXCLUSIVE" ? "default" : "secondary"} className="text-xs">
+                          {s.bookingType === "EXCLUSIVE" ? "Private" : "Shared"}
+                        </Badge>
+                      )}
                     </div>
                     {equipment.length > 0 && (
                       <p className="text-xs text-on-surface-variant mb-3">

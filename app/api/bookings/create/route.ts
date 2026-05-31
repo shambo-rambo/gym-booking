@@ -5,6 +5,7 @@ import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { z } from "zod"
 import {
   validateBookingTime,
+  validateLibraryBookingTime,
   checkConsecutiveDays,
   checkDailyLimit,
   checkSessionLimit,
@@ -17,8 +18,8 @@ import { parseLocalDate } from "@/lib/date-utils"
 export const dynamic = 'force-dynamic'
 
 const createBookingSchema = z.object({
-  facilityType: z.enum(["GYM", "SAUNA"]),
-  bookingType: z.enum(["EXCLUSIVE", "SHARED"]),
+  facilityType: z.enum(["GYM", "SAUNA", "LIBRARY"]),
+  bookingType: z.enum(["EXCLUSIVE", "SHARED"]).optional(),
   equipmentType: z.enum([
     "WEIGHTS_MACHINE",
     "FREE_DUMBBELLS",
@@ -28,7 +29,8 @@ const createBookingSchema = z.object({
   ]).optional(),
   date: z.string(),
   startTime: z.string(),
-  duration: z.number().refine(d => d === 30 || d === 60)
+  endTime: z.string().optional(), // Library only
+  duration: z.number().optional(), // Required for GYM/SAUNA
 })
 
 export async function POST(request: NextRequest) {
@@ -73,10 +75,76 @@ export async function POST(request: NextRequest) {
       equipmentType,
       date: dateStr,
       startTime,
-      duration
+      endTime,
+      duration: rawDuration,
     } = validatedData
 
     const date = parseLocalDate(dateStr)
+
+    // ── Library booking (open start/end, no capacity rules) ──────────────────
+    if (facilityType === "LIBRARY") {
+      if (!endTime) {
+        return NextResponse.json({ error: "End time is required for library bookings." }, { status: 400 })
+      }
+
+      const timeValidation = validateLibraryBookingTime(date, startTime, endTime)
+      if (!timeValidation.allowed) {
+        return NextResponse.json({ error: timeValidation.reason }, { status: 400 })
+      }
+
+      const [sh, sm] = startTime.split(':').map(Number)
+      const [eh, em] = endTime.split(':').map(Number)
+      const duration = (eh * 60 + em) - (sh * 60 + sm)
+
+      try {
+        const booking = await prisma.booking.create({
+          data: {
+            userId,
+            facilityType: FacilityType.LIBRARY,
+            bookingType: BookingType.EXCLUSIVE,
+            date,
+            startTime,
+            endTime,
+            duration,
+          },
+          include: { user: { select: { name: true, email: true } } },
+        })
+
+        sendNotification(user, 'BOOKING_CONFIRMATION', {
+          facilityType: 'Library',
+          bookingType: 'EXCLUSIVE',
+          date: format(booking.date, 'EEEE, MMMM d, yyyy'),
+          startTime: booking.startTime,
+          duration: booking.duration,
+        }).catch(err => console.error('[Booking] Notification failed:', err))
+
+        return NextResponse.json({
+          success: true,
+          booking: {
+            id: booking.id,
+            facilityType: booking.facilityType,
+            bookingType: booking.bookingType,
+            date: booking.date,
+            startTime: booking.startTime,
+            endTime: booking.endTime,
+            duration: booking.duration,
+            createdAt: booking.createdAt,
+          },
+        })
+      } catch (err: any) {
+        console.error("Library booking creation error:", err)
+        return NextResponse.json({ error: "Failed to create booking" }, { status: 500 })
+      }
+    }
+
+    // ── Gym / Sauna booking ───────────────────────────────────────────────────
+    if (!bookingType) {
+      return NextResponse.json({ error: "Booking type is required." }, { status: 400 })
+    }
+    if (rawDuration === undefined || (rawDuration !== 30 && rawDuration !== 60)) {
+      return NextResponse.json({ error: "Duration must be 30 or 60 minutes." }, { status: 400 })
+    }
+    const duration = rawDuration
 
     // Validation 1: Equipment type required for shared gym bookings
     if (

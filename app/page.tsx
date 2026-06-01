@@ -8,9 +8,10 @@ import Navbar from "@/components/Navbar"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { format, formatDistanceToNow } from "date-fns"
-import { CalendarPlus, Clock } from "lucide-react"
+import { CalendarPlus, Clock, RotateCcw } from "lucide-react"
 import { EQUIPMENT_LABELS } from "@/lib/equipment"
 import type { EquipmentType } from "@prisma/client"
+import { BookAgainDialog, type RepeatSession } from "@/components/BookAgainDialog"
 
 interface Booking {
   id: string
@@ -84,8 +85,10 @@ export default function HomePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [bookings, setBookings] = useState<{ upcoming: Booking[] }>({ upcoming: [] })
+  const [pastBookings, setPastBookings] = useState<Booking[]>([])
   const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [bookAgainSession, setBookAgainSession] = useState<RepeatSession | null>(null)
   const [cancellingKey, setCancellingKey] = useState<string | null>(null)
   const [cancelError, setCancelError] = useState<string | null>(null)
   const [leavingId, setLeavingId] = useState<string | null>(null)
@@ -107,6 +110,7 @@ export default function HomePage() {
         const data = await res.json()
         setBookings({ upcoming: data.upcoming })
         setWaitlist(data.queue || [])
+        setPastBookings(data.past || [])
       }
     } finally {
       setLoading(false)
@@ -158,6 +162,10 @@ export default function HomePage() {
     }
   }
 
+  const handleBookAgain = (s: BookingSession) => {
+    setBookAgainSession(s)
+  }
+
   if (status === "loading" || loading) {
     return (
       <div className="min-h-screen bg-surface flex items-center justify-center">
@@ -167,6 +175,7 @@ export default function HomePage() {
   }
 
   const upcomingSessions = groupIntoSessions(bookings.upcoming)
+  const pastSessions = groupIntoSessions(pastBookings).slice(0, 5)
   const hasAnything = upcomingSessions.length > 0 || waitlist.length > 0
 
   return (
@@ -288,7 +297,7 @@ export default function HomePage() {
         )}
 
         {/* Upcoming Bookings */}
-        <section>
+        <section className="mb-8">
           <h2 className="text-[10px] uppercase tracking-[0.2em] font-bold text-secondary mb-3">
             Upcoming Bookings
           </h2>
@@ -374,7 +383,73 @@ export default function HomePage() {
             </div>
           )}
         </section>
+
+        {/* Past Bookings */}
+        {pastSessions.length > 0 && (
+          <section>
+            <h2 className="text-[10px] uppercase tracking-[0.2em] font-bold text-secondary mb-3">
+              Past Bookings
+            </h2>
+            <div className="space-y-3">
+              {pastSessions.map(s => {
+                const key = s.ids.join(",")
+                const equipment = s.equipment.filter(Boolean) as EquipmentType[]
+                return (
+                  <div
+                    key={key}
+                    className="bg-white rounded-xl shadow-sm border border-outline-variant/20 p-4"
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="font-bold text-primary">
+                          {s.facilityType === "GYM" ? "Gym" : s.facilityType === "SAUNA" ? "Sauna" : "Library"}
+                        </p>
+                        <p className="text-sm text-on-surface-variant">
+                          {format(new Date(s.date), "EEE, MMM d")} · {s.startTime}
+                          {s.facilityType === "LIBRARY" && s.endTime
+                            ? ` – ${s.endTime}`
+                            : ` (${s.duration} min)`}
+                        </p>
+                      </div>
+                      {s.facilityType !== "LIBRARY" && (
+                        <Badge variant="outline" className="text-xs text-on-surface-variant">
+                          {s.bookingType === "EXCLUSIVE" ? "Private" : "Shared"}
+                        </Badge>
+                      )}
+                    </div>
+                    {equipment.length > 0 && (
+                      <p className="text-xs text-on-surface-variant mb-3">
+                        {equipment.map(e => equipmentLabel(e)).join(", ")}
+                      </p>
+                    )}
+                    {s.facilityType !== "LIBRARY" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-2"
+                        onClick={() => handleBookAgain(s)}
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Book again
+                      </Button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
       </main>
+
+      {bookAgainSession && (
+        <BookAgainDialog
+          open={!!bookAgainSession}
+          onClose={() => setBookAgainSession(null)}
+          session={bookAgainSession}
+          onSuccess={() => { setBookAgainSession(null); fetchData() }}
+        />
+      )}
     </div>
   )
 }

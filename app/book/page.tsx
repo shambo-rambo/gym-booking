@@ -8,6 +8,7 @@ import { BookingCalendar } from "@/components/calendar/BookingCalendar"
 import { LibraryBookingPanel } from "@/components/library/LibraryBookingPanel"
 import { FacilityType, BookingType } from "@prisma/client"
 import { cn } from "@/lib/utils"
+import { loadBookingPrefs } from "@/lib/bookingPrefs"
 
 type Amenity = "gym" | "sauna" | "library"
 
@@ -21,11 +22,15 @@ export default function BookPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [amenity, setAmenity] = useState<Amenity>("gym")
-  const [gymBookingType, setGymBookingType] = useState<BookingType>(BookingType.SHARED)
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login")
   }, [status, router])
+
+  useEffect(() => {
+    const prefs = loadBookingPrefs()
+    if (prefs?.amenity) setAmenity(prefs.amenity)
+  }, [])
 
   if (status === "loading" || !session) {
     return (
@@ -36,7 +41,6 @@ export default function BookPage() {
   }
 
   const facilityType = amenity === "sauna" ? FacilityType.SAUNA : FacilityType.GYM
-  const bookingType = amenity === "sauna" ? BookingType.EXCLUSIVE : gymBookingType
 
   return (
     <div className="min-h-screen bg-surface">
@@ -72,38 +76,9 @@ export default function BookPage() {
           <LibraryBookingPanel />
         ) : (
           <>
-            {amenity === "gym" && (
-              <div className="flex items-center gap-2 mb-4">
-                <div className="flex rounded-md overflow-hidden border border-outline-variant">
-                  <button
-                    onClick={() => setGymBookingType(BookingType.SHARED)}
-                    className={cn(
-                      "px-4 py-2 text-sm font-medium transition-colors",
-                      gymBookingType === BookingType.SHARED
-                        ? "bg-primary text-on-primary"
-                        : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
-                    )}
-                  >
-                    Shared
-                  </button>
-                  <button
-                    onClick={() => setGymBookingType(BookingType.EXCLUSIVE)}
-                    className={cn(
-                      "px-4 py-2 text-sm font-medium transition-colors",
-                      gymBookingType === BookingType.EXCLUSIVE
-                        ? "bg-primary text-on-primary"
-                        : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
-                    )}
-                  >
-                    Private
-                  </button>
-                </div>
-              </div>
-            )}
-
             <BookingCalendar
               facilityType={facilityType}
-              defaultBookingType={bookingType}
+              defaultBookingType={amenity === "sauna" ? BookingType.EXCLUSIVE : BookingType.SHARED}
             />
           </>
         )}

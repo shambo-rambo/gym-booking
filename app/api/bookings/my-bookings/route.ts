@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const now = new Date()
     now.setHours(0, 0, 0, 0)
 
-    const [upcoming, queueEntries] = await Promise.all([
+    const [upcoming, queueEntries, past] = await Promise.all([
       prisma.booking.findMany({
         where: { userId, date: { gte: now } },
         orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
@@ -28,6 +28,11 @@ export async function GET(request: NextRequest) {
       prisma.queueEntry.findMany({
         where: { userId, date: { gte: now } },
         orderBy: [{ date: 'asc' }, { startTime: 'asc' }, { position: 'asc' }],
+      }),
+      prisma.booking.findMany({
+        where: { userId, date: { lt: now } },
+        orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
+        take: 20,
       }),
     ])
 
@@ -52,7 +57,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ upcoming, queue: queueEntries })
+    return NextResponse.json({ upcoming, queue: queueEntries, past })
 
   } catch (error) {
     console.error("My bookings error:", error)

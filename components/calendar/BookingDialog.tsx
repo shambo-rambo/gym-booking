@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import type { SlotAvailability } from "@/lib/types"
 import { EQUIPMENT_LABELS, EQUIPMENT_LIST } from "@/lib/equipment"
+import { loadBookingPrefs, saveBookingPrefs } from "@/lib/bookingPrefs"
 
 interface BookingPayload {
   facilityType: FacilityType
@@ -61,8 +62,15 @@ export function BookingDialog({
   // on every render. Watching it directly causes equipment to reset mid-session.
   useEffect(() => {
     if (open) {
-      setSelectedBookingType(defaultBookingType)
-      setSelectedEquipment(defaultEquipment)
+      if (facilityType === FacilityType.GYM) {
+        const prefs = loadBookingPrefs()
+        setSelectedBookingType(prefs?.bookingType ?? defaultBookingType)
+        setSelectedDuration(prefs?.duration ?? 30)
+        setSelectedEquipment(prefs?.equipment ?? defaultEquipment)
+      } else {
+        setSelectedBookingType(defaultBookingType)
+        setSelectedEquipment(defaultEquipment)
+      }
       setError("")
       setSuccess("")
     }
@@ -179,6 +187,13 @@ export function BookingDialog({
         }
         if (data.booking?.id) createdIds.push(data.booking.id)
       }
+      const currentPrefs = loadBookingPrefs()
+      saveBookingPrefs({
+        amenity: facilityType === FacilityType.GYM ? "gym" : "sauna",
+        bookingType: selectedBookingType,
+        duration: selectedDuration,
+        equipment: facilityType === FacilityType.GYM ? selectedEquipment : (currentPrefs?.equipment ?? []),
+      })
       onBookingSuccess?.()
       onClose()
     } catch {
@@ -384,6 +399,37 @@ export function BookingDialog({
                   ))}
                 </div>
               </div>
+
+              {/* Booking type — gym only */}
+              {facilityType === FacilityType.GYM && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Session type</Label>
+                  <div className="flex rounded-md overflow-hidden border border-outline-variant">
+                    <button
+                      onClick={() => setSelectedBookingType(BookingType.SHARED)}
+                      className={cn(
+                        "flex-1 px-4 py-2 text-sm font-medium transition-colors",
+                        selectedBookingType === BookingType.SHARED
+                          ? "bg-primary text-on-primary"
+                          : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+                      )}
+                    >
+                      Shared
+                    </button>
+                    <button
+                      onClick={() => setSelectedBookingType(BookingType.EXCLUSIVE)}
+                      className={cn(
+                        "flex-1 px-4 py-2 text-sm font-medium transition-colors",
+                        selectedBookingType === BookingType.EXCLUSIVE
+                          ? "bg-primary text-on-primary"
+                          : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+                      )}
+                    >
+                      Private
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Equipment — shared gym only, multi-select */}
               {isSharedGym && (

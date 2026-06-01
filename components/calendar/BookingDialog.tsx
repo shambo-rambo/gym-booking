@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SlotAvailability } from "@/lib/types"
 import { EQUIPMENT_LABELS, EQUIPMENT_LIST } from "@/lib/equipment"
@@ -380,6 +381,26 @@ export function BookingDialog({
           </div>
         ) : (
           <>
+            {/* Booking progress indicator */}
+            <div className="flex items-center gap-1.5 pt-1 pb-2">
+              {[
+                { label: "Facility", done: true },
+                { label: "Date & Time", done: true },
+                { label: "Confirm", done: false },
+              ].map((step, i) => (
+                <div key={step.label} className="flex items-center gap-1.5">
+                  {i > 0 && <span className="text-outline/30 text-[10px]">›</span>}
+                  <span className={cn(
+                    "text-[11px] font-semibold flex items-center gap-0.5",
+                    step.done ? "text-on-surface-variant/50" : "text-primary"
+                  )}>
+                    {step.done && <Check className="w-3 h-3" />}
+                    {step.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+
             <div className="space-y-4 py-4">
               {/* Duration */}
               <div className="space-y-2">

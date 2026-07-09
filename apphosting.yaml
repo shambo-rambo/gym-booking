@@ -64,5 +64,17 @@ env:
     availability:
       - RUNTIME
 
-  # Twilio (SMS) — skipped for now, app uses email only
-  # Uncomment and add secrets when ready to enable SMS
+  - variable: CLICKSEND_USERNAME
+    secret: CLICKSEND_USERNAME
+    availability:
+      - RUNTIME
+
+  - variable: CLICKSEND_API_KEY
+    secret: CLICKSEND_API_KEY
+    availability:
+      - RUNTIME
+
+  - variable: CLICKSEND_SENDER_ID
+    value: ""
+    availability:
+      - RUNTIME

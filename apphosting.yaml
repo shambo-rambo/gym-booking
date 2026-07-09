@@ -74,7 +74,5 @@ env:
     availability:
       - RUNTIME
 
-  - variable: CLICKSEND_SENDER_ID
-    value: ""
-    availability:
-      - RUNTIME
+  # CLICKSEND_SENDER_ID intentionally omitted — optional, unset means ClickSend's default sender.
+  # Add back with a `value:` (or `secret:`) once a Sender ID is actually registered.

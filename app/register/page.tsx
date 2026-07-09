@@ -22,6 +22,7 @@ function RegisterForm() {
     name: "",
     apartmentNumber: "",
     buildingCode: codeFromUrl,
+    residencyType: "",
   })
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -40,6 +41,12 @@ function RegisterForm() {
 
     if (formData.password.length < 8) {
       setError("Password must be at least 8 characters")
+      setLoading(false)
+      return
+    }
+
+    if (!formData.residencyType) {
+      setError("Please select whether you're a tenant or owner")
       setLoading(false)
       return
     }
@@ -128,6 +135,22 @@ function RegisterForm() {
                     ))}
                   </optgroup>
                 ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="residencyType">I am a…</Label>
+              <select
+                id="residencyType"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={formData.residencyType}
+                onChange={(e) => setFormData({ ...formData, residencyType: e.target.value })}
+                required
+              >
+                <option value="">Select one…</option>
+                <option value="TENANT">Tenant</option>
+                <option value="OWNER_OCCUPIER">Owner-occupier</option>
+                <option value="NON_RESIDENT_OWNER">Non-resident owner</option>
               </select>
             </div>
 

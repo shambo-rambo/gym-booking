@@ -3,32 +3,36 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { CalendarDays, BookOpen, Clock, User, Shield, LogOut, Home, BookText, Settings } from "lucide-react"
+import { CalendarDays, BookOpen, Clock, User, Shield, LogOut, Home, BookText, Settings, Bell, Users, MessageSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
+import { useAppMode } from "@/lib/use-app-mode"
+import ModeBanner from "@/components/ModeBanner"
 
 const PAGE_TITLES: Record<string, string> = {
-  "/":                       "Home",
+  "/":                       "Notices",
   "/book":                   "Reserve Your Space",
-  "/my-bookings":            "Home",
-  "/waitlist":               "Waitlist",
-  "/queue":                  "Waitlist",
-  "/settings":               "Settings",
+  "/my-bookings":            "My Bookings",
+  "/queue":                  "My Bookings",
+  "/settings":               "Profile",
   "/manager":                "Dashboard",
   "/manager/users":          "Residents",
   "/manager/bookings":       "All Bookings",
   "/manager/blocked-slots":  "Blocked Slots",
-  "/manager/announcements":  "Announcements",
+  "/manager/messages":       "Messages",
+  "/manager/qr-code":        "Registration QR Code",
 }
 
 export default function Navbar() {
   const { data: session, status } = useSession()
   const pathname = usePathname()
   const [showSignOut, setShowSignOut] = useState(false)
+  const [mode] = useAppMode()
 
   if (status === "loading") return null
 
   const isManager = (session?.user as any)?.role === "MANAGER"
+  const isAdminView = isManager && mode === "ADMIN"
   const pageTitle = PAGE_TITLES[pathname] ?? "The Residences"
 
   const initials = session?.user?.name
@@ -38,12 +42,21 @@ export default function Navbar() {
     .toUpperCase()
     .slice(0, 2) ?? "?"
 
-  const navItems = [
-    { href: "/",           label: "Home",     icon: Home },
-    { href: "/book",       label: "Book",     icon: CalendarDays },
-    { href: "/queue",      label: "Waitlist", icon: Clock },
-    ...(isManager ? [{ href: "/manager", label: "Admin", icon: Shield }] : []),
+  const residentNavItems = [
+    { href: "/",            label: "Home",        icon: Bell },
+    { href: "/book",        label: "Book",        icon: CalendarDays },
+    { href: "/my-bookings", label: "My Bookings", icon: Clock },
+    { href: "/settings",    label: "Profile",     icon: User },
   ]
+
+  const adminNavItems = [
+    { href: "/manager",           label: "Home",      icon: Home },
+    { href: "/manager/users",     label: "Residents", icon: Users },
+    { href: "/manager/messages",  label: "Messages",  icon: MessageSquare },
+    { href: "/settings",          label: "Profile",   icon: User },
+  ]
+
+  const navItems = isAdminView ? adminNavItems : residentNavItems
 
   if (!session) {
     return (
@@ -87,7 +100,9 @@ export default function Navbar() {
           </h1>
         </div>
 
-        <div className="relative">
+        <div className="flex items-center gap-2">
+          {isManager && <ModeBanner />}
+          <div className="relative">
           <button
             onClick={() => setShowSignOut((v) => !v)}
             className="w-9 h-9 bg-primary rounded-full flex items-center justify-center text-on-primary text-xs font-bold hover:bg-primary/90 transition-colors active:scale-95"
@@ -129,6 +144,7 @@ export default function Navbar() {
               </div>
             </>
           )}
+          </div>
         </div>
       </header>
 

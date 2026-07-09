@@ -19,6 +19,8 @@ model User {
   role                   Role     @default(RESIDENT)
   status                 Status   @default(PENDING)
   notificationPreference NotificationPreference @default(EMAIL_ONLY)
+  residencyType          ResidencyType?
+  fobNumber              String?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -27,6 +29,7 @@ model User {
   blockedSlotsCreated    BlockedSlot[]
   announcementsCreated   Announcement[]
   passwordResetTokens    PasswordResetToken[]
+  noticeRecipients       NoticeRecipient[]
 
   @@index([apartmentNumber])
   @@index([status])
@@ -47,6 +50,12 @@ enum NotificationPreference {
   EMAIL_ONLY
   SMS_ONLY
   BOTH
+}
+
+enum ResidencyType {
+  TENANT
+  OWNER_OCCUPIER
+  NON_RESIDENT_OWNER
 }
 
 model Booking {
@@ -128,15 +137,51 @@ model BlockedSlot {
 }
 
 model Announcement {
-  id        String   @id @default(cuid())
-  title     String
-  message   String   @db.Text
-  createdBy String
-  creator   User     @relation(fields: [createdBy], references: [id])
-  createdAt DateTime @default(now())
-  expiresAt DateTime?
+  id           String   @id @default(cuid())
+  title        String
+  message      String   @db.Text
+  createdBy    String
+  creator      User     @relation(fields: [createdBy], references: [id])
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime?
+
+  category     NoticeCategory   @default(GENERAL)
+  targetType   NoticeTargetType @default(ALL)
+  targetValues String[]         @default([])
+  sentEmail    Boolean          @default(false)
+  sentSms      Boolean          @default(false)
+
+  recipients   NoticeRecipient[]
 
   @@index([expiresAt])
+}
+
+model NoticeRecipient {
+  id        String    @id @default(cuid())
+  noticeId  String
+  notice    Announcement @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([noticeId, userId])
+  @@index([userId])
+  @@index([noticeId])
+}
+
+enum NoticeCategory {
+  AMENITY
+  MAINTENANCE
+  URGENT
+  GENERAL
+}
+
+enum NoticeTargetType {
+  ALL
+  RESIDENCY
+  FLOOR
+  APARTMENT
 }
 
 model PasswordResetToken {
@@ -173,6 +218,7 @@ enum NotificationType {
   QUEUE_POSITION_UPDATE
   ACCOUNT_VERIFIED
   BOOKING_CANCELLED_BY_ADMIN
+  BUILDING_MESSAGE
 }
 
 enum NotificationChannel {

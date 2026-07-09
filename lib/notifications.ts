@@ -1,13 +1,13 @@
 import { Resend } from 'resend'
-import twilio from 'twilio'
 import { prisma } from './prisma'
 import { NotificationType, NotificationChannel, User } from '@prisma/client'
 
 // Initialize services (will only work if env vars are set)
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
-const twilioClient = (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_API_KEY_SID && process.env.TWILIO_API_KEY_SECRET)
-  ? twilio(process.env.TWILIO_API_KEY_SID, process.env.TWILIO_API_KEY_SECRET, { accountSid: process.env.TWILIO_ACCOUNT_SID })
-  : null
+const CLICKSEND_USERNAME = process.env.CLICKSEND_USERNAME
+const CLICKSEND_API_KEY = process.env.CLICKSEND_API_KEY
+const CLICKSEND_SENDER_ID = process.env.CLICKSEND_SENDER_ID
+const clickSendConfigured = !!(CLICKSEND_USERNAME && CLICKSEND_API_KEY)
 
 interface NotificationData {
   facilityType?: string
@@ -20,29 +20,43 @@ interface NotificationData {
   claimUrl?: string
   manageUrl?: string
   reason?: string
+  title?: string
+  body?: string
+}
+
+interface ChannelOverride {
+  email?: boolean
+  sms?: boolean
+  // If true, SMS sends to anyone with a phone number regardless of their
+  // notificationPreference — used for Urgent building messages only.
+  forceSms?: boolean
 }
 
 export async function sendNotification(
   user: User,
   type: NotificationType,
-  data: NotificationData
+  data: NotificationData,
+  channelOverride?: ChannelOverride
 ) {
   const { notificationPreference } = user
+  const emailAllowed = channelOverride?.email ?? true
+  const smsAllowed = channelOverride?.sms ?? true
 
   const content = generateNotificationContent(type, data)
 
   // Send via email
   if (
-    notificationPreference === 'EMAIL_ONLY' ||
-    notificationPreference === 'BOTH'
+    emailAllowed &&
+    (notificationPreference === 'EMAIL_ONLY' || notificationPreference === 'BOTH')
   ) {
     await sendEmail(user.email, content.subject, content.emailBody, user.id, type)
   }
 
   // Send via SMS
   if (
-    (notificationPreference === 'SMS_ONLY' || notificationPreference === 'BOTH') &&
-    user.phoneNumber
+    smsAllowed &&
+    user.phoneNumber &&
+    (channelOverride?.forceSms || notificationPreference === 'SMS_ONLY' || notificationPreference === 'BOTH')
   ) {
     await sendSMS(user.phoneNumber, content.smsBody, user.id, type)
   }
@@ -86,23 +100,43 @@ async function sendSMS(
   userId: string,
   type: NotificationType
 ): Promise<void> {
-  if (!twilioClient) {
+  if (!clickSendConfigured) {
     console.log('[SMS - Not Configured] Would send to:', to)
     console.log('[SMS - Not Configured] Body:', body)
 
-    await logNotification(userId, type, NotificationChannel.SMS, body, false, 'Twilio not configured')
+    await logNotification(userId, type, NotificationChannel.SMS, body, false, 'ClickSend not configured')
     return
   }
 
   try {
-    await twilioClient.messages.create({
-      body,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to
+    const auth = Buffer.from(`${CLICKSEND_USERNAME}:${CLICKSEND_API_KEY}`).toString('base64')
+    const res = await fetch('https://rest.clicksend.com/v3/sms/send', {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${auth}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            body,
+            to,
+            ...(CLICKSEND_SENDER_ID ? { from: CLICKSEND_SENDER_ID } : {}),
+          },
+        ],
+      }),
     })
 
-    // Approximate cost: $0.0075 per SMS in Australia
-    await logNotification(userId, type, NotificationChannel.SMS, body, true, null, 0.0075)
+    const data = await res.json()
+    const result = data?.data?.messages?.[0]
+
+    if (!res.ok || result?.status !== 'SUCCESS') {
+      throw new Error(result?.status || data?.response_msg || `ClickSend request failed (${res.status})`)
+    }
+
+    // ClickSend returns the actual per-message price when available; fall back to a rough AUD estimate.
+    const cost = typeof result?.message_price === 'number' ? result.message_price : 0.06
+    await logNotification(userId, type, NotificationChannel.SMS, body, true, null, cost)
     console.log('[SMS] Sent to:', to)
   } catch (error: any) {
     console.error('[SMS] Failed:', error)
@@ -216,6 +250,22 @@ function generateNotificationContent(type: NotificationType, data: NotificationD
           </div>
         `,
         smsBody: `Your booking was cancelled: ${data.facilityType} ${data.date} ${data.startTime}. ${data.reason ? `Reason: ${data.reason}` : ''}`
+      }
+
+    case 'BUILDING_MESSAGE':
+      const title = data.title || 'Building Notice'
+      const body = data.body || ''
+      return {
+        subject: title,
+        emailBody: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">${escapeHtml(title)}</h2>
+            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0; white-space: pre-wrap;">${escapeHtml(body)}</div>
+            <a href="${appUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">Open The Residences</a>
+          </div>
+        `,
+        // Keep SMS short: title + a truncated body so the total stays close to the 160-char guideline.
+        smsBody: `${title}: ${body}`.slice(0, 150) + ` ${appUrl}`
       }
 
     default:

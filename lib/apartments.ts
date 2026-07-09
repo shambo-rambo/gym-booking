@@ -24,3 +24,15 @@ export const UNITS_BY_FLOOR: { label: string; units: number[] }[] = [
   { label: "Level 5", units: [501, 502] },
   { label: "Level 6", units: [601, 602] },
 ]
+
+// Floor is derived from the apartment number, never stored: 0-99 is Ground,
+// 100-199 is Level 1, 200-299 is Level 2, and so on.
+export function getFloorFromApartmentNumber(apartmentNumber: number): { floor: number; label: string } {
+  const floor = Math.floor(apartmentNumber / 100)
+  return { floor, label: floor === 0 ? "Ground" : `Level ${floor}` }
+}
+
+export const ALL_FLOORS: { floor: number; label: string }[] = UNITS_BY_FLOOR.map((f, i) => ({
+  floor: i,
+  label: f.label,
+}))

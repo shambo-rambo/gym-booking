@@ -30,6 +30,8 @@ export async function GET(request: NextRequest) {
       role: true,
       status: true,
       notificationPreference: true,
+      residencyType: true,
+      fobNumber: true,
       createdAt: true,
       updatedAt: true,
     }

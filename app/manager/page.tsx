@@ -3,10 +3,37 @@
 import { useSession } from "next-auth/react"
 import { redirect } from "next/navigation"
 import Navbar from "@/components/Navbar"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import LoadingSpinner from "@/components/LoadingSpinner"
+import { MessageSquare, Users, CalendarDays, Ban } from "lucide-react"
+
+const CARDS = [
+  {
+    href: "/manager/messages",
+    title: "Send a message",
+    description: "Notify residents by app, email, or text",
+    icon: MessageSquare,
+  },
+  {
+    href: "/manager/users",
+    title: "Residents",
+    description: "Verify accounts, edit details, import residents",
+    icon: Users,
+  },
+  {
+    href: "/manager/bookings",
+    title: "Manage bookings",
+    description: "View or cancel any resident's booking",
+    icon: CalendarDays,
+  },
+  {
+    href: "/manager/blocked-slots",
+    title: "Block a facility",
+    description: "Close a slot for maintenance or cleaning",
+    icon: Ban,
+  },
+]
 
 export default function ManagerPage() {
   const { data: session, status } = useSession()
@@ -28,99 +55,25 @@ export default function ManagerPage() {
   return (
     <div className="min-h-screen bg-surface">
       <Navbar />
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-28">
-        <h1 className="text-3xl font-bold mb-6">Manager Dashboard</h1>
+      <main className="max-w-lg mx-auto px-4 sm:px-6 pt-20 pb-28">
+        <h1 className="text-2xl font-bold text-primary mt-6 mb-6">Dashboard</h1>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Link href="/manager/users">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>Approve and manage user accounts</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  • Verify pending registrations
-                  <br />
-                  • View all users
-                  <br />
-                  • Deactivate accounts
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/manager/bookings">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle>Booking Management</CardTitle>
-                <CardDescription>View and manage all bookings</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  • View all bookings
-                  <br />
-                  • Cancel bookings
-                  <br />
-                  • See user details
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/manager/blocked-slots">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle>Facility Management</CardTitle>
-                <CardDescription>Block slots for maintenance</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  • Block time slots
-                  <br />
-                  • Set maintenance periods
-                  <br />
-                  • View blocked slots
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/manager/announcements">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle>Announcements</CardTitle>
-                <CardDescription>Post building announcements</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  • Create announcements
-                  <br />
-                  • Set expiry dates
-                  <br />
-                  • Email all users
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Link href="/manager/qr-code">
-            <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-              <CardHeader>
-                <CardTitle>Registration QR Code</CardTitle>
-                <CardDescription>Onboard new residents</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600">
-                  • Generate registration link
-                  <br />
-                  • Display QR code in lobby
-                  <br />
-                  • Print a sign for the building
-                </p>
-              </CardContent>
-            </Card>
-          </Link>
+        <div className="flex flex-col gap-4">
+          {CARDS.map(({ href, title, description, icon: Icon }) => (
+            <Link key={href} href={href}>
+              <Card className="hover:shadow-lg transition-shadow cursor-pointer active:scale-[0.98]" style={{ minHeight: "60px" }}>
+                <CardContent className="flex items-center gap-4 p-5">
+                  <div className="w-12 h-12 rounded-full bg-secondary/10 flex items-center justify-center shrink-0">
+                    <Icon className="w-6 h-6 text-secondary" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-lg">{title}</CardTitle>
+                    <p className="text-sm text-on-surface-variant mt-0.5">{description}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
         </div>
       </main>
     </div>

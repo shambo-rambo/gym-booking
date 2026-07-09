@@ -11,7 +11,7 @@ A web-based booking system for a residential apartment building's shared gym and
 - **Frontend**: React with Next.js
 - **Database**: Choose the most appropriate option (PostgreSQL, SQLite, or Firebase) based on deployment simplicity and the app's needs
 - **Authentication**: Email-based accounts with apartment association
-- **Notifications**: Email + SMS via Twilio (confirmation, reminders, queue alerts)
+- **Notifications**: Email + SMS via ClickSend (confirmation, reminders, queue alerts)
 
 ## Design Direction
 
@@ -103,7 +103,7 @@ When a timeslot is fully booked, users can join a queue.
 
 ## Notifications (Email + SMS)
 
-Users can choose their notification preference: email only, SMS only, or both. SMS sent via Twilio.
+Users can choose their notification preference: email only, SMS only, or both. SMS sent via ClickSend.
 
 ### User Preferences
 - During registration or in settings, user selects notification preference
@@ -231,18 +231,18 @@ Keep SMS messages short (under 160 characters to avoid splitting). Example:
 
 ---
 
-## Twilio SMS Integration
+## ClickSend SMS Integration
 
-Use Twilio (https://www.twilio.com) for SMS notifications.
+Use ClickSend (https://www.clicksend.com) for SMS notifications.
 
 ### Setup Requirements
-- Twilio Account SID
-- Twilio Auth Token
-- Twilio phone number (Australian or with AU sending capability)
+- ClickSend API username
+- ClickSend API key
+- Optional sender ID (approved alphanumeric sender or a dedicated number)
 
 ### Implementation Notes
 - Store credentials in environment variables (never commit to code)
-- Use Twilio's Node.js SDK
+- Call ClickSend's REST API directly (`POST /v3/sms/send`, Basic Auth) — no SDK dependency needed
 - Implement rate limiting to avoid excessive SMS costs
 - Log all SMS sends for debugging/cost tracking
 

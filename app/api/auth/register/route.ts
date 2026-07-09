@@ -16,6 +16,7 @@ const registerSchema = z.object({
   }),
   buildingCode: z.string().optional(),
   notificationPreference: z.enum(["EMAIL_ONLY", "SMS_ONLY", "BOTH"]).default("EMAIL_ONLY"),
+  residencyType: z.enum(["TENANT", "OWNER_OCCUPIER", "NON_RESIDENT_OWNER"]),
 })
 
 function escapeHtml(str: string): string {
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
         name: validatedData.name,
         apartmentNumber: validatedData.apartmentNumber,
         notificationPreference: "EMAIL_ONLY",
+        residencyType: validatedData.residencyType,
         status,
         role: "RESIDENT",
       },

@@ -3,167 +3,61 @@
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import Navbar from "@/components/Navbar"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { format, formatDistanceToNow } from "date-fns"
-import { CalendarPlus, Clock, RotateCcw } from "lucide-react"
-import { EQUIPMENT_LABELS } from "@/lib/equipment"
-import type { EquipmentType } from "@prisma/client"
-import { BookAgainDialog, type RepeatSession } from "@/components/BookAgainDialog"
+import { AlertTriangle, Bell } from "lucide-react"
 
-interface Booking {
+interface Notice {
   id: string
-  facilityType: string
-  bookingType: string
-  equipmentType: string | null
-  date: string
-  startTime: string
-  endTime: string | null
-  duration: number
+  title: string
+  message: string
+  category: "AMENITY" | "MAINTENANCE" | "URGENT" | "GENERAL"
   createdAt: string
+  createdByName: string
+  readAt: string | null
 }
 
-interface WaitlistEntry {
-  id: string
-  facilityType: string
-  bookingType: string
-  equipmentType: string | null
-  date: string
-  startTime: string
-  duration: number
-  position: number
-  notifiedAt: string | null
-  expiresAt: string | null
-  createdAt: string
-}
-
-interface BookingSession {
-  ids: string[]
-  facilityType: string
-  bookingType: string
-  equipment: (EquipmentType | null)[]
-  date: string
-  startTime: string
-  endTime: string | null
-  duration: number
-  createdAt: string
-}
-
-function groupIntoSessions(bookings: Booking[]): BookingSession[] {
-  const map = new Map<string, BookingSession>()
-  for (const b of bookings) {
-    const key = `${b.facilityType}|${b.date}|${b.startTime}|${b.duration}|${b.bookingType}`
-    const existing = map.get(key)
-    if (existing) {
-      existing.ids.push(b.id)
-      existing.equipment.push(b.equipmentType as EquipmentType | null)
-    } else {
-      map.set(key, {
-        ids: [b.id],
-        facilityType: b.facilityType,
-        bookingType: b.bookingType,
-        equipment: [b.equipmentType as EquipmentType | null],
-        date: b.date,
-        startTime: b.startTime,
-        endTime: b.endTime ?? null,
-        duration: b.duration,
-        createdAt: b.createdAt,
-      })
-    }
-  }
-  return Array.from(map.values())
-}
-
-function equipmentLabel(e: EquipmentType | null): string {
-  if (!e) return ""
-  return EQUIPMENT_LABELS[e] ?? e
+const CATEGORY_LABELS: Record<Notice["category"], string> = {
+  AMENITY: "Amenity",
+  MAINTENANCE: "Maintenance",
+  URGENT: "Urgent",
+  GENERAL: "General",
 }
 
 export default function HomePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [bookings, setBookings] = useState<{ upcoming: Booking[] }>({ upcoming: [] })
-  const [pastBookings, setPastBookings] = useState<Booking[]>([])
-  const [waitlist, setWaitlist] = useState<WaitlistEntry[]>([])
+  const [notices, setNotices] = useState<Notice[]>([])
   const [loading, setLoading] = useState(true)
-  const [bookAgainSession, setBookAgainSession] = useState<RepeatSession | null>(null)
-  const [cancellingKey, setCancellingKey] = useState<string | null>(null)
-  const [cancelError, setCancelError] = useState<string | null>(null)
-  const [leavingId, setLeavingId] = useState<string | null>(null)
-  const [confirmCancelKey, setConfirmCancelKey] = useState<string | null>(null)
-  const [confirmLeaveId, setConfirmLeaveId] = useState<string | null>(null)
+  const [openId, setOpenId] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login")
   }, [status, router])
 
   useEffect(() => {
-    if (status === "authenticated") fetchData()
+    if (status === "authenticated") fetchNotices()
   }, [status])
 
-  const fetchData = async () => {
+  const fetchNotices = async () => {
     try {
-      const res = await fetch("/api/bookings/my-bookings")
+      const res = await fetch("/api/notices")
       if (res.ok) {
         const data = await res.json()
-        setBookings({ upcoming: data.upcoming })
-        setWaitlist(data.queue || [])
-        setPastBookings(data.past || [])
+        setNotices(data.notices || [])
       }
     } finally {
       setLoading(false)
     }
   }
 
-  const handleCancel = async (sessionKey: string, ids: string[]) => {
-    setCancellingKey(sessionKey)
-    setCancelError(null)
-    try {
-      const results = await Promise.all(
-        ids.map(id => fetch(`/api/bookings/${id}`, { method: "DELETE" }))
-      )
-      const failed = await Promise.all(
-        results.filter(r => !r.ok).map(r => r.json())
-      )
-      if (failed.length > 0) {
-        setCancelError(failed[0]?.error || "Could not cancel booking")
-      } else {
-        fetchData()
-      }
-    } finally {
-      setCancellingKey(null)
+  const openNotice = async (notice: Notice) => {
+    setOpenId(openId === notice.id ? null : notice.id)
+    if (!notice.readAt) {
+      setNotices((prev) => prev.map((n) => (n.id === notice.id ? { ...n, readAt: new Date().toISOString() } : n)))
+      await fetch(`/api/notices/${notice.id}/read`, { method: "POST" })
     }
-  }
-
-  const handleLeaveWaitlist = async (id: string) => {
-    setLeavingId(id)
-    try {
-      const res = await fetch(`/api/queue/${id}`, { method: "DELETE" })
-      if (res.ok) fetchData()
-    } finally {
-      setLeavingId(null)
-    }
-  }
-
-  const handleClaimNow = async (id: string) => {
-    setLeavingId(id)
-    try {
-      const res = await fetch(`/api/queue/claim/${id}`, { method: "POST" })
-      if (res.ok) {
-        fetchData()
-      } else {
-        const data = await res.json()
-        alert(data.error || "Failed to claim slot")
-      }
-    } finally {
-      setLeavingId(null)
-    }
-  }
-
-  const handleBookAgain = (s: BookingSession) => {
-    setBookAgainSession(s)
   }
 
   if (status === "loading" || loading) {
@@ -174,282 +68,63 @@ export default function HomePage() {
     )
   }
 
-  const upcomingSessions = groupIntoSessions(bookings.upcoming)
-  const pastSessions = groupIntoSessions(pastBookings).slice(0, 5)
-  const hasAnything = upcomingSessions.length > 0 || waitlist.length > 0
+  const unreadCount = notices.filter((n) => !n.readAt).length
+  const urgent = notices.filter((n) => n.category === "URGENT")
+  const rest = notices.filter((n) => n.category !== "URGENT")
+
+  const NoticeCard = ({ notice }: { notice: Notice }) => {
+    const isUrgent = notice.category === "URGENT"
+    const isUnread = !notice.readAt
+    const isOpen = openId === notice.id
+    return (
+      <button
+        onClick={() => openNotice(notice)}
+        className={`w-full text-left bg-white rounded-xl shadow-sm border p-4 transition-colors ${
+          isUrgent ? "border-red-300 bg-red-50" : "border-outline-variant/20"
+        }`}
+      >
+        <div className="flex items-start justify-between gap-2 mb-1">
+          <div className="flex items-center gap-2">
+            {isUrgent && <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
+            <p className={`font-bold ${isUrgent ? "text-red-700" : "text-primary"}`}>{notice.title}</p>
+            {isUnread && <span className="w-2 h-2 rounded-full bg-secondary shrink-0" />}
+          </div>
+          <Badge variant={isUrgent ? "destructive" : "outline"} className="text-[10px] shrink-0">
+            {CATEGORY_LABELS[notice.category]}
+          </Badge>
+        </div>
+        <p className="text-xs text-on-surface-variant mb-2">
+          {formatDistanceToNow(new Date(notice.createdAt), { addSuffix: true })} · {notice.createdByName}
+        </p>
+        <p className={`text-sm text-on-surface-variant ${isOpen ? "" : "line-clamp-2"}`}>{notice.message}</p>
+      </button>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-surface">
       <Navbar />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 pt-20 pb-28">
-
-        {/* Make a Booking CTA */}
-        <div className="mt-6 mb-8">
-          <Link href="/book">
-            <button className="w-full flex items-center justify-center gap-3 bg-primary text-on-primary font-bold text-base py-4 rounded-xl shadow-card active:scale-[0.98] transition-all">
-              <CalendarPlus className="w-5 h-5" />
-              Make a Booking
-            </button>
-          </Link>
+        <div className="flex items-center gap-2 mt-6 mb-6">
+          <Bell className="w-5 h-5 text-secondary" />
+          <h1 className="text-lg font-bold text-primary">Notices</h1>
+          {unreadCount > 0 && (
+            <Badge className="ml-auto bg-secondary text-on-secondary">{unreadCount} new</Badge>
+          )}
         </div>
 
-        {cancelError && (
-          <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700">
-            {cancelError}
+        {notices.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-outline-variant/20 p-8 text-center">
+            <p className="text-on-surface-variant font-medium mb-1">No notices yet</p>
+            <p className="text-sm text-on-surface-variant/60">Building announcements will show up here.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {urgent.map((n) => <NoticeCard key={n.id} notice={n} />)}
+            {rest.map((n) => <NoticeCard key={n.id} notice={n} />)}
           </div>
         )}
-
-        {/* Waitlist */}
-        {waitlist.length > 0 && (
-          <section className="mb-8">
-            <h2 className="text-[10px] uppercase tracking-[0.2em] font-bold text-secondary mb-3">
-              Waitlist ({waitlist.length})
-            </h2>
-            <div className="space-y-3">
-              {waitlist.map(entry => {
-                const isNotified = !!entry.notifiedAt
-                const hasExpired = entry.expiresAt && new Date(entry.expiresAt) < new Date()
-                const slotDateTime = new Date(entry.date)
-                const [slotH, slotM] = entry.startTime.split(':').map(Number)
-                slotDateTime.setHours(slotH, slotM, 0, 0)
-                const minutesUntilSlot = (slotDateTime.getTime() - Date.now()) / (1000 * 60)
-                const isLastMinute = minutesUntilSlot > 0 && minutesUntilSlot <= 180
-                return (
-                  <div
-                    key={entry.id}
-                    className={`bg-white rounded-xl shadow-sm border p-4 ${isNotified && !hasExpired ? "border-green-400 border-2" : "border-outline-variant/20"}`}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="font-bold text-primary">
-                          {entry.facilityType === "GYM" ? "Gym" : entry.facilityType === "SAUNA" ? "Sauna" : "Library"}
-                          {isNotified && !hasExpired && (
-                            <span className="ml-2 text-xs font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                              Slot Available!
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-sm text-on-surface-variant">
-                          {format(new Date(entry.date), "EEE, MMM d")} · {entry.startTime} ({entry.duration} min)
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-xs">#{entry.position}</Badge>
-                    </div>
-                    {entry.equipmentType && (
-                      <p className="text-xs text-on-surface-variant mb-3">
-                        {equipmentLabel(entry.equipmentType as EquipmentType)}
-                      </p>
-                    )}
-                    {isNotified && !hasExpired && entry.expiresAt && (
-                      <div className="bg-green-50 rounded-lg px-3 py-2 mb-3">
-                        <p className="text-xs font-semibold text-green-800 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          Claim before {format(new Date(entry.expiresAt), "h:mm a")}
-                          {" · "}
-                          {formatDistanceToNow(new Date(entry.expiresAt), { addSuffix: true })}
-                        </p>
-                      </div>
-                    )}
-                    <div className="flex gap-2">
-                      {isNotified && !hasExpired ? (
-                        <Link href="/queue" className="flex-1">
-                          <Button size="sm" className="w-full bg-green-500 hover:bg-green-600 text-white">
-                            Claim Slot
-                          </Button>
-                        </Link>
-                      ) : isLastMinute && !isNotified ? (
-                        <Button
-                          size="sm"
-                          className="flex-1 bg-green-500 hover:bg-green-600 text-white"
-                          disabled={leavingId === entry.id}
-                          onClick={() => handleClaimNow(entry.id)}
-                        >
-                          {leavingId === entry.id ? "Claiming…" : "Claim Now"}
-                        </Button>
-                      ) : confirmLeaveId === entry.id ? (
-                        <div className="flex gap-2 flex-1">
-                          <Button size="sm" variant="destructive" className="flex-1"
-                            disabled={leavingId === entry.id}
-                            onClick={() => { setConfirmLeaveId(null); handleLeaveWaitlist(entry.id) }}>
-                            {leavingId === entry.id ? "Leaving…" : "Yes, leave"}
-                          </Button>
-                          <Button size="sm" variant="outline" className="flex-1"
-                            onClick={() => setConfirmLeaveId(null)}>
-                            Keep spot
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          onClick={() => setConfirmLeaveId(entry.id)}
-                        >
-                          Leave Waitlist
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* Upcoming Bookings */}
-        <section className="mb-8">
-          <h2 className="text-[10px] uppercase tracking-[0.2em] font-bold text-secondary mb-3">
-            Upcoming Bookings
-          </h2>
-
-          {!hasAnything ? (
-            <div className="bg-white rounded-xl shadow-sm border border-outline-variant/20 p-8 text-center">
-              <p className="text-on-surface-variant font-medium mb-1">No upcoming bookings</p>
-              <p className="text-sm text-on-surface-variant/60">Use the button above to reserve a slot.</p>
-            </div>
-          ) : upcomingSessions.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm border border-outline-variant/20 p-8 text-center">
-              <p className="text-sm text-on-surface-variant">No confirmed bookings yet.</p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {upcomingSessions.map(s => {
-                const key = s.ids.join(",")
-                const equipment = s.equipment.filter(Boolean) as EquipmentType[]
-                const dateStr = String(s.date).slice(0, 10)
-                const start = new Date(`${dateStr}T${s.startTime}:00`)
-                const minutesUntil = (start.getTime() - Date.now()) / (1000 * 60)
-                const canCancel = minutesUntil > 30
-
-                return (
-                  <div
-                    key={key}
-                    className="bg-white rounded-xl shadow-sm border border-outline-variant/20 p-4"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-bold text-primary">
-                          {s.facilityType === "GYM" ? "Gym" : s.facilityType === "SAUNA" ? "Sauna" : "Library"}
-                        </p>
-                        <p className="text-sm text-on-surface-variant">
-                          {format(new Date(s.date), "EEE, MMM d")} · {s.startTime}
-                          {s.facilityType === "LIBRARY" && s.endTime
-                            ? ` – ${s.endTime}`
-                            : ` (${s.duration} min)`}
-                        </p>
-                      </div>
-                      {s.facilityType !== "LIBRARY" && (
-                        <Badge variant={s.bookingType === "EXCLUSIVE" ? "default" : "secondary"} className="text-xs">
-                          {s.bookingType === "EXCLUSIVE" ? "Private" : "Shared"}
-                        </Badge>
-                      )}
-                    </div>
-                    {equipment.length > 0 && (
-                      <p className="text-xs text-on-surface-variant mb-3">
-                        {equipment.map(e => equipmentLabel(e)).join(", ")}
-                      </p>
-                    )}
-                    {!canCancel && (
-                      <p className="text-xs text-amber-600 mb-2">
-                        Cannot cancel within 30 minutes of start
-                      </p>
-                    )}
-                    {confirmCancelKey === key ? (
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="destructive" className="flex-1"
-                          disabled={cancellingKey === key}
-                          onClick={() => { setConfirmCancelKey(null); handleCancel(key, s.ids) }}>
-                          {cancellingKey === key ? "Cancelling…" : "Yes, cancel"}
-                        </Button>
-                        <Button size="sm" variant="outline" className="flex-1"
-                          onClick={() => setConfirmCancelKey(null)}>
-                          Keep booking
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full text-destructive border-destructive/30 hover:bg-destructive/5"
-                        disabled={!canCancel}
-                        onClick={() => setConfirmCancelKey(key)}
-                      >
-                        Cancel Booking
-                      </Button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* Past Bookings */}
-        {pastSessions.length > 0 && (
-          <section>
-            <h2 className="text-[10px] uppercase tracking-[0.2em] font-bold text-secondary mb-3">
-              Past Bookings
-            </h2>
-            <div className="space-y-3">
-              {pastSessions.map(s => {
-                const key = s.ids.join(",")
-                const equipment = s.equipment.filter(Boolean) as EquipmentType[]
-                return (
-                  <div
-                    key={key}
-                    className="bg-white rounded-xl shadow-sm border border-outline-variant/20 p-4"
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <div>
-                        <p className="font-bold text-primary">
-                          {s.facilityType === "GYM" ? "Gym" : s.facilityType === "SAUNA" ? "Sauna" : "Library"}
-                        </p>
-                        <p className="text-sm text-on-surface-variant">
-                          {format(new Date(s.date), "EEE, MMM d")} · {s.startTime}
-                          {s.facilityType === "LIBRARY" && s.endTime
-                            ? ` – ${s.endTime}`
-                            : ` (${s.duration} min)`}
-                        </p>
-                      </div>
-                      {s.facilityType !== "LIBRARY" && (
-                        <Badge variant="outline" className="text-xs text-on-surface-variant">
-                          {s.bookingType === "EXCLUSIVE" ? "Private" : "Shared"}
-                        </Badge>
-                      )}
-                    </div>
-                    {equipment.length > 0 && (
-                      <p className="text-xs text-on-surface-variant mb-3">
-                        {equipment.map(e => equipmentLabel(e)).join(", ")}
-                      </p>
-                    )}
-                    {s.facilityType !== "LIBRARY" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full gap-2"
-                        onClick={() => handleBookAgain(s)}
-                      >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        Book again
-                      </Button>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        )}
-
       </main>
-
-      {bookAgainSession && (
-        <BookAgainDialog
-          open={!!bookAgainSession}
-          onClose={() => setBookAgainSession(null)}
-          session={bookAgainSession}
-          onSuccess={() => { setBookAgainSession(null); fetchData() }}
-        />
-      )}
     </div>
   )
 }

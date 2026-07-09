@@ -303,9 +303,24 @@ export default function SettingsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="EMAIL_ONLY">Email only</SelectItem>
+                    <SelectItem value="SMS_ONLY">Text only</SelectItem>
+                    <SelectItem value="BOTH">Email and text</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              {(notificationPreference === "SMS_ONLY" || notificationPreference === "BOTH") && (
+                <div className="space-y-2">
+                  <Label htmlFor="phoneNumber">Mobile number</Label>
+                  <Input
+                    id="phoneNumber"
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => setPhoneNumber(e.target.value)}
+                    placeholder="+61400000000"
+                  />
+                  <p className="text-xs text-gray-400">Australian mobile, format +61XXXXXXXXX</p>
+                </div>
+              )}
               {error && (
                 <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
                   {error}

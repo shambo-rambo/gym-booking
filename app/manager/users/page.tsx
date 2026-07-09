@@ -2,7 +2,8 @@
 
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
+import Link from "next/link"
 import Navbar from "@/components/Navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,7 +11,10 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
-import { CheckCircle, XCircle, Mail, Phone, Home, Search, Pencil } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { CheckCircle, XCircle, Mail, Phone, Home, Search, Pencil, QrCode, Upload } from "lucide-react"
+import { getFloorFromApartmentNumber, VALID_UNITS } from "@/lib/apartments"
 
 type User = {
   id: string
@@ -21,7 +25,32 @@ type User = {
   role: string
   status: string
   notificationPreference: string
+  residencyType: string | null
+  fobNumber: string | null
   createdAt: string
+}
+
+const RESIDENCY_LABELS: Record<string, string> = {
+  TENANT: "Tenant",
+  OWNER_OCCUPIER: "Owner-occupier",
+  NON_RESIDENT_OWNER: "Non-resident owner",
+}
+
+function parseImportCsv(text: string): { name: string; email: string; apartmentNumber: number; mobile?: string; residencyType: string; fobNumber?: string }[] {
+  const lines = text.trim().split(/\r?\n/).filter(Boolean)
+  // Skip a header row if present
+  const dataLines = /email/i.test(lines[0]) ? lines.slice(1) : lines
+  return dataLines.map((line) => {
+    const [name, email, apartmentNumber, mobile, residencyType, fobNumber] = line.split(",").map((c) => c.trim())
+    return {
+      name,
+      email,
+      apartmentNumber: parseInt(apartmentNumber, 10),
+      mobile: mobile || undefined,
+      residencyType: (residencyType || "").toUpperCase(),
+      fobNumber: fobNumber || undefined,
+    }
+  })
 }
 
 type UsersData = {
@@ -48,8 +77,13 @@ export default function ManagerUsersPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name: "", email: "", apartmentNumber: "", phoneNumber: "" })
+  const [editForm, setEditForm] = useState({ name: "", email: "", apartmentNumber: "", phoneNumber: "", residencyType: "", fobNumber: "", notificationPreference: "EMAIL_ONLY" })
   const [editError, setEditError] = useState("")
+  const [importOpen, setImportOpen] = useState(false)
+  const [importText, setImportText] = useState("")
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState("")
+  const [importSuccess, setImportSuccess] = useState("")
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login")
@@ -126,6 +160,9 @@ export default function ManagerUsersPage() {
       email: user.email,
       apartmentNumber: String(user.apartmentNumber),
       phoneNumber: user.phoneNumber ?? "",
+      residencyType: user.residencyType ?? "",
+      fobNumber: user.fobNumber ?? "",
+      notificationPreference: user.notificationPreference ?? "EMAIL_ONLY",
     })
   }
 
@@ -141,6 +178,9 @@ export default function ManagerUsersPage() {
           email: editForm.email,
           apartmentNumber: parseInt(editForm.apartmentNumber, 10),
           phoneNumber: editForm.phoneNumber || null,
+          residencyType: editForm.residencyType || null,
+          fobNumber: editForm.fobNumber || null,
+          notificationPreference: editForm.notificationPreference,
         }),
       })
       const data = await response.json()
@@ -154,6 +194,39 @@ export default function ManagerUsersPage() {
       setEditError("An error occurred")
     } finally {
       setActionLoading(null)
+    }
+  }
+
+  const handleImport = async () => {
+    setImportError("")
+    setImportSuccess("")
+    setImporting(true)
+    try {
+      const rows = parseImportCsv(importText)
+      if (rows.length === 0) {
+        setImportError("Paste at least one row.")
+        return
+      }
+      const response = await fetch("/api/manager/users/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        const detail = Array.isArray(data.details)
+          ? data.details.map((d: any) => (d.row ? `Row ${d.row}: ${d.message}` : d)).join("; ")
+          : ""
+        setImportError(`${data.error}${detail ? " — " + detail : ""}`)
+        return
+      }
+      setImportSuccess(`Imported ${data.created.length} resident(s). They'll each get an email to set their password.`)
+      setImportText("")
+      await fetchUsers()
+    } catch {
+      setImportError("Could not parse or import that data.")
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -198,9 +271,14 @@ export default function ManagerUsersPage() {
                 )}
                 <div className="flex items-center gap-2 text-sm">
                   <Home className="h-4 w-4 shrink-0" />
-                  Unit {user.apartmentNumber}
+                  Unit {user.apartmentNumber} · {getFloorFromApartmentNumber(user.apartmentNumber).label}
                 </div>
               </CardDescription>
+              {user.residencyType && (
+                <Badge variant="outline" className="mt-2 text-xs">
+                  {RESIDENCY_LABELS[user.residencyType] ?? user.residencyType}
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-2 ml-2 shrink-0">
               <Badge variant={user.role === "MANAGER" ? "default" : "secondary"}>
@@ -234,6 +312,34 @@ export default function ManagerUsersPage() {
             <div className="space-y-1">
               <Label>Phone (optional)</Label>
               <Input type="tel" placeholder="+61..." value={editForm.phoneNumber} onChange={(e) => setEditForm((f) => ({ ...f, phoneNumber: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+              <Label>Notification method</Label>
+              <Select value={editForm.notificationPreference} onValueChange={(v) => setEditForm((f) => ({ ...f, notificationPreference: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="EMAIL_ONLY">Email only</SelectItem>
+                  <SelectItem value="SMS_ONLY">Text only</SelectItem>
+                  <SelectItem value="BOTH">Email and text</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Residency type</Label>
+                <Select value={editForm.residencyType} onValueChange={(v) => setEditForm((f) => ({ ...f, residencyType: v }))}>
+                  <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TENANT">Tenant</SelectItem>
+                    <SelectItem value="OWNER_OCCUPIER">Owner-occupier</SelectItem>
+                    <SelectItem value="NON_RESIDENT_OWNER">Non-resident owner</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label>Fob number (optional)</Label>
+                <Input value={editForm.fobNumber} onChange={(e) => setEditForm((f) => ({ ...f, fobNumber: e.target.value }))} />
+              </div>
             </div>
             {editError && <p className="text-sm text-red-600">{editError}</p>}
             <div className="flex gap-2">
@@ -296,7 +402,48 @@ export default function ManagerUsersPage() {
     <div className="min-h-screen bg-surface">
       <Navbar />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-28">
-        <h1 className="text-3xl font-bold mb-6">Residents</h1>
+        <div className="flex items-center justify-between mb-6 gap-2 flex-wrap">
+          <h1 className="text-3xl font-bold">Residents</h1>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="gap-2" onClick={() => setImportOpen(true)}>
+              <Upload className="h-4 w-4" />
+              Import
+            </Button>
+            <Link href="/manager/qr-code">
+              <Button variant="outline" size="sm" className="gap-2">
+                <QrCode className="h-4 w-4" />
+                Registration QR
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        <Dialog open={importOpen} onOpenChange={setImportOpen}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Import residents</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-on-surface-variant">
+              Paste one resident per line: <code className="text-xs">name, email, unit, mobile, residencyType, fobNumber</code>
+              <br />
+              residencyType is one of TENANT, OWNER_OCCUPIER, NON_RESIDENT_OWNER. Mobile and fob number are optional.
+            </p>
+            <textarea
+              className="w-full h-40 border rounded-md p-2 text-sm font-mono"
+              placeholder={"Jane Smith, jane@example.com, 304, +61400000000, OWNER_OCCUPIER,\nJohn Doe, john@example.com, 105, , TENANT,"}
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+            />
+            {importError && <p className="text-sm text-red-600">{importError}</p>}
+            {importSuccess && <p className="text-sm text-green-600">{importSuccess}</p>}
+            <div className="flex gap-2">
+              <Button onClick={handleImport} disabled={importing || !importText.trim()}>
+                {importing ? "Importing…" : "Import residents"}
+              </Button>
+              <Button variant="ghost" onClick={() => setImportOpen(false)}>Close</Button>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Search — filters all tabs by name, email, or unit number */}
         <div className="relative mb-6 max-w-sm">

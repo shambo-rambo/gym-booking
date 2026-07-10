@@ -64,7 +64,7 @@ User books a specific piece of gym equipment OR shares the sauna. Other users ca
 ## Booking Rules
 
 ### Universal Rules
-- Operating hours: 5am to 10pm daily
+- Operating hours: 6am to 10pm daily
 - Booking durations: 30 minutes or 1 hour
 - Booking window: Up to 1 week in advance
 - Cancellation: Allowed up to 5 minutes before start time
@@ -133,7 +133,7 @@ Keep SMS messages short (under 160 characters to avoid splitting). Example:
 
 ### Week View (Default)
 - Display Monday to Sunday
-- Show all timeslots from 5am to 10pm
+- Show all timeslots from 6am to 10pm
 - Each slot shows availability status at a glance:
   - Available (can book)
   - Partially booked (shared slots remaining)
@@ -225,7 +225,7 @@ Keep SMS messages short (under 160 characters to avoid splitting). Example:
 
 5. **Apartment reaches 4-user limit**: New registrations for that apartment go to pending/waitlist, manager notified.
 
-6. **Booking spans across midnight**: Not applicable - operating hours are 5am-10pm, so this won't happen.
+6. **Booking spans across midnight**: Not applicable - operating hours are 6am-10pm, so this won't happen.
 
 7. **User tries to cancel with less than 5 minutes notice**: Allow it (the 5-minute rule is a minimum, not a restriction).
 

@@ -15,6 +15,10 @@ export interface ValidationResult {
   reason?: string
 }
 
+// Booking types that occupy the entire facility for the slot — a plain single-facility
+// exclusive ("Private") booking, or one half of a linked EXCLUSIVE_BOTH (Gym+Sauna) booking.
+export const EXCLUSIVE_TYPES: BookingType[] = [BookingType.EXCLUSIVE, BookingType.EXCLUSIVE_BOTH]
+
 export function parseSlotDateTime(date: Date, startTime: string): Date {
   const [hours, minutes] = startTime.split(':').map(Number)
   const result = new Date(date)
@@ -154,12 +158,12 @@ export async function isSlotAvailable(
     return bStart < slotEnd && bEnd > slotStart
   })
 
-  const hasExclusive = overlapping.some(b => b.bookingType === BookingType.EXCLUSIVE)
+  const hasExclusive = overlapping.some(b => EXCLUSIVE_TYPES.includes(b.bookingType))
   if (hasExclusive) {
     return { allowed: false, reason: "Slot has an exclusive booking." }
   }
 
-  if (bookingType === BookingType.EXCLUSIVE) {
+  if (EXCLUSIVE_TYPES.includes(bookingType)) {
     if (overlapping.length > 0) {
       return { allowed: false, reason: "Slot is already booked." }
     }
@@ -267,10 +271,10 @@ export function validateLibraryBookingTime(
   return { allowed: true }
 }
 
-// Generate all time slots for a day (5am to 10:30pm in 30-minute intervals)
+// Generate all time slots for a day (6am to 10:30pm in 30-minute intervals)
 export function generateTimeSlots(): string[] {
   const slots: string[] = []
-  for (let hour = 5; hour <= 22; hour++) {
+  for (let hour = 6; hour <= 22; hour++) {
     slots.push(`${hour.toString().padStart(2, '0')}:00`)
     slots.push(`${hour.toString().padStart(2, '0')}:30`)
   }

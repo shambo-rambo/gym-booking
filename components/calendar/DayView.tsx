@@ -303,7 +303,7 @@ export function DayView({
                             <div key={d.duration} className="text-xs">
                               <span className="font-medium text-gray-600">{d.duration} min:</span>{' '}
                               <span className="font-semibold text-blue-600">
-                                Your booking · {isShared ? "Shared" : "Private"}
+                                Your booking · {isShared ? "Shared" : d.userBooking.bookingType === "EXCLUSIVE_BOTH" ? "Exclusive" : "Private"}
                               </span>
                               {isShared && myEquip && (
                                 <span className="text-gray-500"> · {equipNames[myEquip] || myEquip}</span>

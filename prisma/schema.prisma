@@ -72,11 +72,16 @@ model Booking {
   duration      Int
   endTime       String?  // Set only for LIBRARY bookings
 
+  // Links the paired Gym+Sauna rows created by one EXCLUSIVE_BOTH booking so they can be
+  // cancelled together. Null for all other booking types.
+  groupId       String?
+
   createdAt     DateTime @default(now())
 
   @@index([userId])
   @@index([facilityType, date, startTime])
   @@index([date, startTime])
+  @@index([groupId])
 }
 
 enum FacilityType {
@@ -96,6 +101,10 @@ enum EquipmentType {
 enum BookingType {
   EXCLUSIVE
   SHARED
+  // Books the whole Gym AND the whole Sauna together for the same slot. Labelled
+  // "Exclusive" in the UI — not to be confused with EXCLUSIVE ("Private"), which
+  // is whole-facility but single-amenity.
+  EXCLUSIVE_BOTH
 }
 
 model QueueEntry {

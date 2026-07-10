@@ -13,8 +13,8 @@ const sendSchema = z.object({
   targetValues: z.array(z.string()).default([]),
   title: z.string().min(1).max(200),
   message: z.string().min(1).max(5000),
-  sendEmail: z.boolean(),
   sendSms: z.boolean(),
+  excludedUserIds: z.array(z.string()).default([]),
 })
 
 const BATCH_SIZE = 20
@@ -67,7 +67,11 @@ export async function POST(request: NextRequest) {
     }
 
     const data = sendSchema.parse(await request.json())
-    const recipients = await resolveNoticeRecipients(data.targetType, data.targetValues)
+    const excluded = new Set(data.excludedUserIds)
+    const recipients = (await resolveNoticeRecipients(data.targetType, data.targetValues)).filter(
+      (u) => !excluded.has(u.id)
+    )
+    const forceSms = data.category === "URGENT"
 
     const notice = await prisma.announcement.create({
       data: {
@@ -77,7 +81,7 @@ export async function POST(request: NextRequest) {
         category: data.category,
         targetType: data.targetType,
         targetValues: data.targetValues,
-        sentEmail: data.sendEmail,
+        sentEmail: true,
         sentSms: data.sendSms,
       },
     })
@@ -89,18 +93,25 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Fan out email/SMS in small concurrent batches so we don't hammer Resend/Twilio at once.
+    // Fan out in small concurrent batches so we don't hammer Resend/ClickSend at once.
+    // Cascade per resident: text wins if they're reachable by SMS, otherwise they always
+    // get the email (residents can opt out of SMS but not email — email carries things
+    // like AGM votes). Urgent messages force SMS to anyone with a phone on file.
     for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
       const batch = recipients.slice(i, i + BATCH_SIZE)
       await Promise.all(
-        batch.map((user) =>
-          sendNotification(
+        batch.map((user) => {
+          const textEligible =
+            data.sendSms &&
+            !!user.phoneNumber &&
+            (forceSms || user.notificationPreference === "SMS_ONLY" || user.notificationPreference === "BOTH")
+          return sendNotification(
             user,
             "BUILDING_MESSAGE",
             { title: data.title, body: data.message },
-            { email: data.sendEmail, sms: data.sendSms, forceSms: data.category === "URGENT" }
+            { email: !textEligible, sms: textEligible, forceSms }
           ).catch((err) => console.error("[Messages] Notification failed for", user.id, err))
-        )
+        })
       )
     }
 

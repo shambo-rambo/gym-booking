@@ -111,6 +111,7 @@ export function BookingDialog({
 
   const isSharedGym = facilityType === FacilityType.GYM && selectedBookingType === BookingType.SHARED
   const needsEquipment = isSharedGym && selectedEquipment.length === 0
+  const isExclusiveType = (t: BookingType) => t === BookingType.EXCLUSIVE || t === BookingType.EXCLUSIVE_BOTH
 
   const minutesUntilBooking = (() => {
     const [h, m] = startTime.split(":").map(Number)
@@ -236,7 +237,7 @@ export function BookingDialog({
         return
       }
       const isWaitlist =
-        (exclusiveBlockedByAntiHoarding && selectedBookingType === BookingType.EXCLUSIVE) ||
+        (exclusiveBlockedByAntiHoarding && isExclusiveType(selectedBookingType)) ||
         (sharedBlockedByAntiHoarding && selectedBookingType === BookingType.SHARED)
 
       setSuccess(
@@ -273,7 +274,7 @@ export function BookingDialog({
 
   const antiHoardingReason = slot?.exclusive?.reason ?? ""
   const canBookSelectedType =
-    selectedBookingType === BookingType.EXCLUSIVE ? canBookExclusive : canBookShared
+    isExclusiveType(selectedBookingType) ? canBookExclusive : canBookShared
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -308,8 +309,8 @@ export function BookingDialog({
             <div className="bg-blue-50 border border-blue-300 rounded-lg p-4">
               <div className="flex items-start justify-between mb-3">
                 <h3 className="font-semibold text-blue-900">You have a booking here</h3>
-                <Badge variant={existingUserBooking.bookingType === "EXCLUSIVE" ? "default" : "secondary"}>
-                  {existingUserBooking.bookingType}
+                <Badge variant={isExclusiveType(existingUserBooking.bookingType) ? "default" : "secondary"}>
+                  {existingUserBooking.bookingType === "EXCLUSIVE_BOTH" ? "EXCLUSIVE (GYM+SAUNA)" : existingUserBooking.bookingType}
                 </Badge>
               </div>
               <div className="space-y-2 text-sm">
@@ -421,36 +422,50 @@ export function BookingDialog({
                 </div>
               </div>
 
-              {/* Booking type — gym only */}
-              {facilityType === FacilityType.GYM && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Session type</Label>
-                  <div className="flex rounded-md overflow-hidden border border-outline-variant">
-                    <button
-                      onClick={() => setSelectedBookingType(BookingType.SHARED)}
-                      className={cn(
-                        "flex-1 px-4 py-2 text-sm font-medium transition-colors",
-                        selectedBookingType === BookingType.SHARED
-                          ? "bg-primary text-on-primary"
-                          : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
-                      )}
-                    >
-                      Shared
-                    </button>
-                    <button
-                      onClick={() => setSelectedBookingType(BookingType.EXCLUSIVE)}
-                      className={cn(
-                        "flex-1 px-4 py-2 text-sm font-medium transition-colors",
-                        selectedBookingType === BookingType.EXCLUSIVE
-                          ? "bg-primary text-on-primary"
-                          : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
-                      )}
-                    >
-                      Private
-                    </button>
-                  </div>
+              {/* Session type — Gym and Sauna both */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Session type</Label>
+                <div className="flex rounded-md overflow-hidden border border-outline-variant">
+                  <button
+                    onClick={() => setSelectedBookingType(BookingType.SHARED)}
+                    className={cn(
+                      "flex-1 px-4 py-2 text-sm font-medium transition-colors",
+                      selectedBookingType === BookingType.SHARED
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+                    )}
+                  >
+                    Shared
+                  </button>
+                  <button
+                    onClick={() => setSelectedBookingType(BookingType.EXCLUSIVE)}
+                    className={cn(
+                      "flex-1 px-4 py-2 text-sm font-medium transition-colors",
+                      selectedBookingType === BookingType.EXCLUSIVE
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+                    )}
+                  >
+                    Private
+                  </button>
+                  <button
+                    onClick={() => setSelectedBookingType(BookingType.EXCLUSIVE_BOTH)}
+                    className={cn(
+                      "flex-1 px-4 py-2 text-sm font-medium transition-colors",
+                      selectedBookingType === BookingType.EXCLUSIVE_BOTH
+                        ? "bg-primary text-on-primary"
+                        : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high"
+                    )}
+                  >
+                    Exclusive
+                  </button>
                 </div>
-              )}
+                {selectedBookingType === BookingType.EXCLUSIVE_BOTH && (
+                  <p className="text-xs text-gray-500">
+                    Books the whole {facilityType === FacilityType.GYM ? "Gym and the Sauna" : "Sauna and the Gym"} together — no one else can use either during this time.
+                  </p>
+                )}
+              </div>
 
               {/* Equipment — shared gym only, multi-select */}
               {isSharedGym && (
@@ -502,6 +517,8 @@ export function BookingDialog({
                   <p className="text-blue-700">
                     {slot.userBooking.bookingType === "EXCLUSIVE"
                       ? "Private session"
+                      : slot.userBooking.bookingType === "EXCLUSIVE_BOTH"
+                      ? "Exclusive session (Gym + Sauna)"
                       : slot.userBooking.equipmentType
                       ? EQUIPMENT_LABELS[slot.userBooking.equipmentType]
                       : "Shared"}
@@ -517,7 +534,7 @@ export function BookingDialog({
               )}
 
               {/* Anti-hoarding waitlist banner */}
-              {exclusiveBlockedByAntiHoarding && selectedBookingType === BookingType.EXCLUSIVE && !slot?.userBooking && (
+              {exclusiveBlockedByAntiHoarding && isExclusiveType(selectedBookingType) && !slot?.userBooking && (
                 <div className="bg-amber-50 border border-amber-200 rounded p-3">
                   <p className="text-sm font-semibold text-amber-900">Waitlist available</p>
                   <p className="text-xs text-amber-800 mt-1">{antiHoardingReason}</p>
@@ -565,7 +582,7 @@ export function BookingDialog({
                   >
                     {loading
                       ? "Joining…"
-                      : (exclusiveBlockedByAntiHoarding && selectedBookingType === BookingType.EXCLUSIVE) ||
+                      : (exclusiveBlockedByAntiHoarding && isExclusiveType(selectedBookingType)) ||
                         (sharedBlockedByAntiHoarding && selectedBookingType === BookingType.SHARED)
                       ? "Join Waitlist"
                       : "Join Queue"}

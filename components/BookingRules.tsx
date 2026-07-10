@@ -39,7 +39,7 @@ export function BookingRules() {
       {/* Hours */}
       <Section icon={<Clock className="w-5 h-5" />} title="Hours & Booking Window">
         <ul className="space-y-2">
-          <Rule>Facilities open <strong>5:00 AM – 11:00 PM</strong> every day</Rule>
+          <Rule>Facilities open <strong>6:00 AM – 11:00 PM</strong> every day</Rule>
           <Rule>Book up to <strong>7 days in advance</strong></Rule>
           <Rule>Sessions are <strong>30 or 60 minutes</strong></Rule>
         </ul>

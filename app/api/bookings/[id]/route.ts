@@ -55,23 +55,30 @@ export async function DELETE(
       )
     }
 
-    // Delete the booking
-    await prisma.booking.delete({
-      where: { id: bookingId }
+    // Exclusive (Gym + Sauna) bookings are two linked rows sharing a groupId — cancelling
+    // either one must free both, since they represent a single booking action.
+    const linkedBookings = booking.groupId
+      ? await prisma.booking.findMany({ where: { groupId: booking.groupId } })
+      : [booking]
+
+    await prisma.booking.deleteMany({
+      where: booking.groupId ? { groupId: booking.groupId } : { id: bookingId }
     })
 
-    // Check if anyone is queued for this slot and notify them
-    if (booking.facilityType === "LIBRARY") {
-      await notifyLibraryQueueAfterCancellation(booking.date)
-    } else {
-      await notifyNextInQueue(
-        booking.facilityType,
-        booking.bookingType,
-        booking.equipmentType,
-        booking.date,
-        booking.startTime,
-        booking.duration
-      )
+    // Check if anyone is queued for the freed slot(s) and notify them
+    for (const freed of linkedBookings) {
+      if (freed.facilityType === "LIBRARY") {
+        await notifyLibraryQueueAfterCancellation(freed.date)
+      } else {
+        await notifyNextInQueue(
+          freed.facilityType,
+          freed.bookingType,
+          freed.equipmentType,
+          freed.date,
+          freed.startTime,
+          freed.duration
+        )
+      }
     }
 
     return NextResponse.json({

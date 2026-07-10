@@ -71,9 +71,9 @@ function getStatusText(slot: SlotAvailability | undefined, status: DisplayStatus
   switch (status) {
     case "yours": {
       const d = slot?.durations?.find((d) => d.userBooking !== null)
-      return d?.userBooking?.bookingType === "EXCLUSIVE"
-        ? "Your booking · Private"
-        : "Your booking · Shared"
+      if (d?.userBooking?.bookingType === "EXCLUSIVE") return "Your booking · Private"
+      if (d?.userBooking?.bookingType === "EXCLUSIVE_BOTH") return "Your booking · Exclusive"
+      return "Your booking · Shared"
     }
     case "queued": {
       const d = slot?.durations?.find((d) => d.userQueueEntry !== null)

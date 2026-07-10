@@ -54,7 +54,12 @@ interface BookingSession {
 function groupIntoSessions(bookings: Booking[]): BookingSession[] {
   const map = new Map<string, BookingSession>()
   for (const b of bookings) {
-    const key = `${b.facilityType}|${b.date}|${b.startTime}|${b.duration}|${b.bookingType}`
+    // EXCLUSIVE_BOTH bookings are two linked rows (one Gym, one Sauna) representing a
+    // single Exclusive booking action — group them together regardless of facilityType.
+    const isExclusiveBoth = b.bookingType === "EXCLUSIVE_BOTH"
+    const key = isExclusiveBoth
+      ? `BOTH|${b.date}|${b.startTime}|${b.duration}|${b.bookingType}`
+      : `${b.facilityType}|${b.date}|${b.startTime}|${b.duration}|${b.bookingType}`
     const existing = map.get(key)
     if (existing) {
       existing.ids.push(b.id)
@@ -62,7 +67,7 @@ function groupIntoSessions(bookings: Booking[]): BookingSession[] {
     } else {
       map.set(key, {
         ids: [b.id],
-        facilityType: b.facilityType,
+        facilityType: isExclusiveBoth ? "BOTH" : b.facilityType,
         bookingType: b.bookingType,
         equipment: [b.equipmentType as EquipmentType | null],
         date: b.date,
@@ -163,7 +168,10 @@ export default function MyBookingsPage() {
   }
 
   const handleBookAgain = (s: BookingSession) => {
-    setBookAgainSession(s)
+    // "BOTH" is a display-only grouping for Exclusive (Gym+Sauna) sessions — the repeat
+    // flow just needs one real facilityType to check availability against; the create API
+    // still books both facilities for an EXCLUSIVE_BOTH booking regardless of which is sent.
+    setBookAgainSession(s.facilityType === "BOTH" ? { ...s, facilityType: "GYM" } : s)
   }
 
   if (status === "loading" || loading) {
@@ -329,7 +337,7 @@ export default function MyBookingsPage() {
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <p className="font-bold text-primary">
-                          {s.facilityType === "GYM" ? "Gym" : s.facilityType === "SAUNA" ? "Sauna" : "Library"}
+                          {s.facilityType === "GYM" ? "Gym" : s.facilityType === "SAUNA" ? "Sauna" : s.facilityType === "BOTH" ? "Gym + Sauna" : "Library"}
                         </p>
                         <p className="text-sm text-on-surface-variant">
                           {format(new Date(s.date), "EEE, MMM d")} · {s.startTime}
@@ -339,8 +347,8 @@ export default function MyBookingsPage() {
                         </p>
                       </div>
                       {s.facilityType !== "LIBRARY" && (
-                        <Badge variant={s.bookingType === "EXCLUSIVE" ? "default" : "secondary"} className="text-xs">
-                          {s.bookingType === "EXCLUSIVE" ? "Private" : "Shared"}
+                        <Badge variant={s.bookingType !== "SHARED" ? "default" : "secondary"} className="text-xs">
+                          {s.bookingType === "EXCLUSIVE" ? "Private" : s.bookingType === "EXCLUSIVE_BOTH" ? "Exclusive" : "Shared"}
                         </Badge>
                       )}
                     </div>
@@ -358,7 +366,13 @@ export default function MyBookingsPage() {
                       <div className="flex gap-2">
                         <Button size="sm" variant="destructive" className="flex-1"
                           disabled={cancellingKey === key}
-                          onClick={() => { setConfirmCancelKey(null); handleCancel(key, s.ids) }}>
+                          onClick={() => {
+                            setConfirmCancelKey(null)
+                            // EXCLUSIVE_BOTH ids are two linked rows (Gym + Sauna) that the
+                            // server cascades on delete — cancel via a single id to avoid a
+                            // second, racing DELETE call hitting an already-removed row.
+                            handleCancel(key, s.bookingType === "EXCLUSIVE_BOTH" ? s.ids.slice(0, 1) : s.ids)
+                          }}>
                           {cancellingKey === key ? "Cancelling…" : "Yes, cancel"}
                         </Button>
                         <Button size="sm" variant="outline" className="flex-1"
@@ -402,7 +416,7 @@ export default function MyBookingsPage() {
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <p className="font-bold text-primary">
-                          {s.facilityType === "GYM" ? "Gym" : s.facilityType === "SAUNA" ? "Sauna" : "Library"}
+                          {s.facilityType === "GYM" ? "Gym" : s.facilityType === "SAUNA" ? "Sauna" : s.facilityType === "BOTH" ? "Gym + Sauna" : "Library"}
                         </p>
                         <p className="text-sm text-on-surface-variant">
                           {format(new Date(s.date), "EEE, MMM d")} · {s.startTime}
@@ -413,7 +427,7 @@ export default function MyBookingsPage() {
                       </div>
                       {s.facilityType !== "LIBRARY" && (
                         <Badge variant="outline" className="text-xs text-on-surface-variant">
-                          {s.bookingType === "EXCLUSIVE" ? "Private" : "Shared"}
+                          {s.bookingType === "EXCLUSIVE" ? "Private" : s.bookingType === "EXCLUSIVE_BOTH" ? "Exclusive" : "Shared"}
                         </Badge>
                       )}
                     </div>

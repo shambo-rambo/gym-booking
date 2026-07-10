@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
-import { generateTimeSlots, parseSlotDateTime } from "@/lib/booking-rules"
+import { generateTimeSlots, parseSlotDateTime, EXCLUSIVE_TYPES } from "@/lib/booking-rules"
 import { parseLocalDate } from "@/lib/date-utils"
 
 export const dynamic = 'force-dynamic'
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest) {
         const userQueueEntry = userQueueEntryStartsHere ?? userQueueEntryExtendsHere
 
         const hasExclusiveBooking = slotBookings.some(
-          (b) => b.bookingType === BookingType.EXCLUSIVE
+          (b) => EXCLUSIVE_TYPES.includes(b.bookingType)
         )
 
         // Shared anti-hoarding: applies to all slot types for this user.

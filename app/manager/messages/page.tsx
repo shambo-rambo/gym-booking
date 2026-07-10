@@ -19,22 +19,30 @@ import { ChevronLeft, Home, Wrench, AlertTriangle, Megaphone } from "lucide-reac
 import { UNITS_BY_FLOOR, ALL_FLOORS } from "@/lib/apartments"
 import { format, formatDistanceToNow } from "date-fns"
 
+const SMS_COST_ESTIMATE = 0.06 // AUD per message, matches lib/notifications.ts ClickSend fallback
+
 type Category = "AMENITY" | "MAINTENANCE" | "URGENT" | "GENERAL"
 type TargetMode = "ALL" | "TENANT" | "OWNERS" | "OWNER_OCCUPIER" | "FLOOR" | "APARTMENT"
 
-const CATEGORY_OPTIONS: { value: Category; label: string; icon: any; email: boolean; sms: boolean }[] = [
-  { value: "AMENITY", label: "Amenity", icon: Home, email: false, sms: false },
-  { value: "MAINTENANCE", label: "Maintenance", icon: Wrench, email: true, sms: false },
-  { value: "URGENT", label: "Urgent", icon: AlertTriangle, email: true, sms: true },
-  { value: "GENERAL", label: "General", icon: Megaphone, email: false, sms: false },
+const CATEGORY_OPTIONS: { value: Category; label: string; icon: any; sms: boolean }[] = [
+  { value: "AMENITY", label: "Amenity", icon: Home, sms: false },
+  { value: "MAINTENANCE", label: "Maintenance", icon: Wrench, sms: false },
+  { value: "URGENT", label: "Urgent", icon: AlertTriangle, sms: true },
+  { value: "GENERAL", label: "General", icon: Megaphone, sms: false },
 ]
+
+interface RecipientDetail {
+  id: string
+  name: string
+  apartmentNumber: number
+  smsEligible: boolean
+}
 
 interface Preview {
   total: number
-  emailEligible: number
   smsEligible: number
   smsForced: boolean
-  estimatedSmsCost: number
+  recipients: RecipientDetail[]
 }
 
 interface SentNotice {
@@ -42,6 +50,9 @@ interface SentNotice {
   title: string
   message: string
   category: Category
+  targetType: string
+  targetValues: string[]
+  sentSms: boolean
   createdAt: string
   createdByName: string
   recipientCount: number
@@ -52,7 +63,6 @@ export default function MessagesPage() {
 
   const [step, setStep] = useState(1)
   const [category, setCategory] = useState<Category | null>(null)
-  const [emailOn, setEmailOn] = useState(false)
   const [smsOn, setSmsOn] = useState(false)
   const [targetMode, setTargetMode] = useState<TargetMode>("ALL")
   const [selectedFloors, setSelectedFloors] = useState<number[]>([])
@@ -66,6 +76,9 @@ export default function MessagesPage() {
   const [sendError, setSendError] = useState("")
   const [sentConfirm, setSentConfirm] = useState<{ recipientCount: number } | null>(null)
   const [awaitingFinalConfirm, setAwaitingFinalConfirm] = useState(false)
+  const [showRecipients, setShowRecipients] = useState(false)
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set())
+  const [confirmCancel, setConfirmCancel] = useState(false)
 
   const [history, setHistory] = useState<SentNotice[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
@@ -99,6 +112,62 @@ export default function MessagesPage() {
     }
   }
 
+  // Reverses targetTypeAndValues() so a past message's audience can be restored into the wizard.
+  const targetModeFromHistory = (n: SentNotice): { targetMode: TargetMode; floors: number[]; apartments: number[] } => {
+    if (n.targetType === "FLOOR") return { targetMode: "FLOOR", floors: n.targetValues.map(Number), apartments: [] }
+    if (n.targetType === "APARTMENT") return { targetMode: "APARTMENT", floors: [], apartments: n.targetValues.map(Number) }
+    if (n.targetType === "RESIDENCY") {
+      const values = new Set(n.targetValues)
+      if (values.size === 1 && values.has("TENANT")) return { targetMode: "TENANT", floors: [], apartments: [] }
+      if (values.size === 1 && values.has("OWNER_OCCUPIER")) return { targetMode: "OWNER_OCCUPIER", floors: [], apartments: [] }
+      return { targetMode: "OWNERS", floors: [], apartments: [] }
+    }
+    return { targetMode: "ALL", floors: [], apartments: [] }
+  }
+
+  const FLOOR_LABELS = new Map(ALL_FLOORS.map((f) => [f.floor, f.label]))
+
+  // Human-readable audience description for a sent message, e.g. "Level 3" or "Apt 305"
+  // instead of just a raw recipient count.
+  const describeAudience = (n: SentNotice): string => {
+    if (n.targetType === "ALL") return "Everyone"
+    if (n.targetType === "RESIDENCY") {
+      const values = new Set(n.targetValues)
+      if (values.size === 1 && values.has("TENANT")) return "Tenants"
+      if (values.size === 1 && values.has("OWNER_OCCUPIER")) return "Owner-occupiers"
+      return "Owners"
+    }
+    if (n.targetType === "FLOOR") {
+      const labels = n.targetValues.map((v) => FLOOR_LABELS.get(Number(v)) ?? `Level ${v}`)
+      return labels.join(", ")
+    }
+    if (n.targetType === "APARTMENT") {
+      return n.targetValues.length === 1
+        ? `Apt ${n.targetValues[0]}`
+        : `${n.targetValues.length} apartments`
+    }
+    return "Custom audience"
+  }
+
+  const reuseNotice = (n: SentNotice) => {
+    const { targetMode: tm, floors, apartments } = targetModeFromHistory(n)
+    setCategory(n.category)
+    setSmsOn(n.sentSms)
+    setTargetMode(tm)
+    setSelectedFloors(floors)
+    setSelectedApartments(apartments)
+    setTitle(n.title)
+    setMessage(n.message)
+    setPreview(null)
+    setExcludedIds(new Set())
+    setShowRecipients(false)
+    setSendError("")
+    setSentConfirm(null)
+    setConfirmCancel(false)
+    setAwaitingFinalConfirm(false)
+    setStep(3)
+  }
+
   const canProceedFromTarget =
     targetMode === "FLOOR" ? selectedFloors.length > 0 :
     targetMode === "APARTMENT" ? selectedApartments.length > 0 :
@@ -107,6 +176,7 @@ export default function MessagesPage() {
   const goToReview = async () => {
     setStep(4)
     setPreviewLoading(true)
+    setExcludedIds(new Set())
     try {
       const { targetType, targetValues } = targetTypeAndValues()
       const res = await fetch("/api/manager/messages/preview", {
@@ -134,8 +204,8 @@ export default function MessagesPage() {
           targetValues,
           title,
           message,
-          sendEmail: emailOn,
           sendSms: smsOn,
+          excludedUserIds: Array.from(excludedIds),
         }),
       })
       const data = await res.json()
@@ -153,10 +223,22 @@ export default function MessagesPage() {
     }
   }
 
+  const includedRecipients = preview ? preview.recipients.filter((r) => !excludedIds.has(r.id)) : []
+  const includedTotal = includedRecipients.length
+  const includedSmsEligible = includedRecipients.filter((r) => r.smsEligible).length
+
+  const toggleRecipient = (id: string) => {
+    setExcludedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   const startNew = () => {
     setStep(1)
     setCategory(null)
-    setEmailOn(false)
     setSmsOn(false)
     setTargetMode("ALL")
     setSelectedFloors([])
@@ -166,6 +248,9 @@ export default function MessagesPage() {
     setPreview(null)
     setSentConfirm(null)
     setSendError("")
+    setShowRecipients(false)
+    setExcludedIds(new Set())
+    setConfirmCancel(false)
   }
 
   if (sentConfirm) {
@@ -198,15 +283,61 @@ export default function MessagesPage() {
           <h1 className="text-2xl font-bold text-primary">Send a message</h1>
         </div>
 
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-center justify-between gap-3 mb-6">
           {step > 1 ? (
-            <Button variant="ghost" size="sm" className="gap-1 px-2" onClick={() => setStep((s) => Math.max(1, s - 1))}>
-              <ChevronLeft className="w-4 h-4" /> Back
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                style={{ minHeight: "48px" }}
+                className="gap-1 px-4 text-sm font-semibold"
+                onClick={() => setStep((s) => Math.max(1, s - 1))}
+              >
+                <ChevronLeft className="w-4 h-4" /> Back
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                style={{ minHeight: "48px" }}
+                className="px-4 text-sm font-semibold text-destructive border-destructive/30 hover:bg-destructive/5"
+                onClick={() => setConfirmCancel(true)}
+              >
+                Cancel
+              </Button>
+            </div>
           ) : <div />}
-          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wide ml-auto">Step {step} of 4</p>
+          <p className="text-xs font-bold text-on-surface-variant uppercase tracking-wide shrink-0">Step {step} of 4</p>
         </div>
         <Progress value={(step / 4) * 100} className="mb-8" />
+
+        {confirmCancel && (
+          <Card className="mb-6 border-destructive/30">
+            <CardContent className="p-5 space-y-4">
+              <p className="font-bold text-primary">Discard this message?</p>
+              <p className="text-sm text-on-surface-variant">
+                What you've entered so far will be lost and nothing will be sent.
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1 text-sm font-semibold"
+                  style={{ minHeight: "56px" }}
+                  onClick={() => setConfirmCancel(false)}
+                >
+                  Keep editing
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1 text-sm font-semibold"
+                  style={{ minHeight: "56px" }}
+                  onClick={startNew}
+                >
+                  Discard message
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {step === 1 && (
           <div>
@@ -217,7 +348,6 @@ export default function MessagesPage() {
                   key={opt.value}
                   onClick={() => {
                     setCategory(opt.value)
-                    setEmailOn(opt.email)
                     setSmsOn(opt.sms)
                     setStep(2)
                   }}
@@ -232,7 +362,7 @@ export default function MessagesPage() {
           </div>
         )}
 
-        {step === 2 && (
+        {step === 2 && !confirmCancel && (
           <div>
             <h2 className="text-lg font-bold mb-4">Who should get this?</h2>
             <RadioGroup value={targetMode} onValueChange={(v) => setTargetMode(v as TargetMode)} className="gap-3">
@@ -306,7 +436,7 @@ export default function MessagesPage() {
           </div>
         )}
 
-        {step === 3 && (
+        {step === 3 && !confirmCancel && (
           <div className="space-y-5">
             <h2 className="text-lg font-bold">What's the message?</h2>
             <div className="space-y-2">
@@ -339,7 +469,7 @@ export default function MessagesPage() {
           </div>
         )}
 
-        {step === 4 && (
+        {step === 4 && !confirmCancel && (
           <div className="space-y-5">
             <h2 className="text-lg font-bold">Review and send</h2>
 
@@ -355,26 +485,57 @@ export default function MessagesPage() {
             ) : preview ? (
               <Card>
                 <CardContent className="p-5 space-y-3">
-                  <p className="text-base">
-                    Goes to <span className="font-bold">{preview.total}</span> resident{preview.total === 1 ? "" : "s"}. In-app: all {preview.total}.
-                  </p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-base">
+                      Goes to <span className="font-bold">{includedTotal}</span> resident{includedTotal === 1 ? "" : "s"}
+                      {excludedIds.size > 0 ? ` (${excludedIds.size} removed below)` : ""}.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-xs shrink-0 px-3"
+                      onClick={() => setShowRecipients((s) => !s)}
+                    >
+                      {showRecipients ? "Hide list" : "Show all recipients"}
+                    </Button>
+                  </div>
+
+                  {showRecipients && (
+                    <div className="max-h-64 overflow-y-auto rounded-lg border border-outline-variant/20 divide-y divide-outline-variant/10">
+                      {preview.recipients.map((r) => {
+                        const included = !excludedIds.has(r.id)
+                        const getsSms = included && smsOn && r.smsEligible
+                        return (
+                          <label key={r.id} className="flex items-center gap-3 px-3 py-2 text-sm cursor-pointer">
+                            <Checkbox className="w-4 h-4 shrink-0" checked={included} onCheckedChange={() => toggleRecipient(r.id)} />
+                            <span className="flex-1">{r.name} <span className="text-on-surface-variant">· Apt {r.apartmentNumber}</span></span>
+                            <span className="text-xs text-on-surface-variant text-right shrink-0">
+                              {!included ? "Removed" : getsSms ? "Text" : "Email"}
+                            </span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  )}
 
                   <div className="flex items-center justify-between py-2 border-t border-outline-variant/20">
                     <div>
-                      <p className="font-semibold">Email</p>
-                      <p className="text-xs text-on-surface-variant">{preview.emailEligible} residents allow email</p>
+                      <p className="font-semibold">Email + in-app</p>
+                      <p className="text-xs text-on-surface-variant">
+                        Always sent to all {includedTotal} — residents can't opt out of email (it's used for AGM votes etc.)
+                      </p>
                     </div>
-                    <Switch checked={emailOn} onCheckedChange={setEmailOn} />
                   </div>
 
                   <div className="flex items-center justify-between py-2 border-t border-outline-variant/20">
                     <div>
-                      <p className="font-semibold">Text</p>
+                      <p className="font-semibold">Also send as text</p>
                       <p className="text-xs text-on-surface-variant">
                         {preview.smsForced
-                          ? `Urgent overrides preference — ${preview.smsEligible} residents have a mobile on file`
-                          : `${preview.smsEligible} residents allow texts`
-                        } · est. ${preview.estimatedSmsCost.toFixed(2)}
+                          ? `Urgent overrides preference — ${includedSmsEligible} of ${includedTotal} residents have a mobile on file`
+                          : `${includedSmsEligible} of ${includedTotal} residents opted into texts`
+                        } · est. ${(includedSmsEligible * SMS_COST_ESTIMATE).toFixed(2)}. They get a text instead of an email, not both.
                       </p>
                     </div>
                     <Switch checked={smsOn} onCheckedChange={setSmsOn} />
@@ -389,7 +550,7 @@ export default function MessagesPage() {
               <Button
                 className="w-full text-base"
                 style={{ minHeight: "60px" }}
-                disabled={sending || previewLoading}
+                disabled={sending || previewLoading || includedTotal === 0}
                 onClick={() => setAwaitingFinalConfirm(true)}
               >
                 Send message
@@ -397,7 +558,7 @@ export default function MessagesPage() {
             ) : (
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-center">
-                  Send this to {preview?.total ?? 0} resident{(preview?.total ?? 0) === 1 ? "" : "s"} now?
+                  Send this to {includedTotal} resident{includedTotal === 1 ? "" : "s"} now?
                 </p>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" style={{ minHeight: "60px" }} onClick={() => setAwaitingFinalConfirm(false)}>
@@ -430,8 +591,20 @@ export default function MessagesPage() {
                       </div>
                       <p className="text-sm text-on-surface-variant line-clamp-2 mt-1">{n.message}</p>
                       <p className="text-xs text-on-surface-variant/70 mt-2">
-                        {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })} · {n.createdByName} · {n.recipientCount} recipient{n.recipientCount === 1 ? "" : "s"}
+                        {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })} · {n.createdByName}
                       </p>
+                      <p className="text-xs font-semibold text-secondary mt-0.5">
+                        {describeAudience(n)} · {n.recipientCount} recipient{n.recipientCount === 1 ? "" : "s"}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        style={{ minHeight: "44px" }}
+                        className="w-full mt-3 text-sm font-semibold"
+                        onClick={() => reuseNotice(n)}
+                      >
+                        Use as template
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}

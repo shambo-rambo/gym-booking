@@ -213,7 +213,7 @@ export function BookAgainDialog({ open, onClose, session, onSuccess }: Props) {
           <DialogDescription className="text-base sm:text-sm">
             {session.facilityType === "GYM" ? "Gym" : "Sauna"}
             {" · "}
-            {session.bookingType === "EXCLUSIVE" ? "Private" : "Shared"}
+            {session.bookingType === "EXCLUSIVE" ? "Private" : session.bookingType === "EXCLUSIVE_BOTH" ? "Exclusive" : "Shared"}
             {" · "}
             {session.duration} min
             {equipment.length > 0 && ` · ${equipment.map(e => EQUIPMENT_LABELS[e]).join(", ")}`}

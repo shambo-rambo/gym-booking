@@ -41,14 +41,18 @@ export async function sendNotification(
   const { notificationPreference } = user
   const emailAllowed = channelOverride?.email ?? true
   const smsAllowed = channelOverride?.sms ?? true
+  const prefAllowsEmail = notificationPreference === 'EMAIL_ONLY' || notificationPreference === 'BOTH'
+  const prefAllowsSms = notificationPreference === 'SMS_ONLY' || notificationPreference === 'BOTH'
 
   const content = generateNotificationContent(type, data)
 
+  // Building-wide notices (AGM votes, maintenance, etc.) are always delivered by email —
+  // residents can opt out of SMS for these, but not email. Other notification types
+  // still respect the resident's per-channel preference.
+  const emailGate = type === 'BUILDING_MESSAGE' ? true : prefAllowsEmail
+
   // Send via email
-  if (
-    emailAllowed &&
-    (notificationPreference === 'EMAIL_ONLY' || notificationPreference === 'BOTH')
-  ) {
+  if (emailAllowed && emailGate) {
     await sendEmail(user.email, content.subject, content.emailBody, user.id, type)
   }
 
@@ -56,7 +60,7 @@ export async function sendNotification(
   if (
     smsAllowed &&
     user.phoneNumber &&
-    (channelOverride?.forceSms || notificationPreference === 'SMS_ONLY' || notificationPreference === 'BOTH')
+    (channelOverride?.forceSms || prefAllowsSms)
   ) {
     await sendSMS(user.phoneNumber, content.smsBody, user.id, type)
   }

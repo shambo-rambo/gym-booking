@@ -47,33 +47,43 @@ export async function DELETE(
       return NextResponse.json({ error: "Booking not found" }, { status: 404 })
     }
 
-    // Delete the booking
-    await prisma.booking.delete({
-      where: { id: bookingId }
+    // Exclusive (Gym + Sauna) bookings are two linked rows sharing a groupId — cancelling
+    // either one must free both, since they represent a single booking action.
+    const linkedBookings = booking.groupId
+      ? await prisma.booking.findMany({ where: { groupId: booking.groupId } })
+      : [booking]
+
+    await prisma.booking.deleteMany({
+      where: booking.groupId ? { groupId: booking.groupId } : { id: bookingId }
     })
 
     // Notify user if requested
     if (validatedData.notifyUser) {
+      const facilityLabel = linkedBookings.length > 1
+        ? "Gym & Sauna"
+        : booking.facilityType.toString()
       sendNotification(booking.user, 'BOOKING_CANCELLED_BY_ADMIN', {
-        facilityType: booking.facilityType.toString(),
+        facilityType: facilityLabel,
         date: format(booking.date, 'EEEE, MMMM d, yyyy'),
         startTime: booking.startTime,
         reason: validatedData.reason
       }).catch(err => console.error('[Booking] Notification failed:', err))
     }
 
-    // Check if anyone is queued for this slot and notify them
-    if (booking.facilityType === "LIBRARY") {
-      await notifyLibraryQueueAfterCancellation(booking.date)
-    } else {
-      await notifyNextInQueue(
-        booking.facilityType,
-        booking.bookingType,
-        booking.equipmentType,
-        booking.date,
-        booking.startTime,
-        booking.duration
-      )
+    // Check if anyone is queued for the freed slot(s) and notify them
+    for (const freed of linkedBookings) {
+      if (freed.facilityType === "LIBRARY") {
+        await notifyLibraryQueueAfterCancellation(freed.date)
+      } else {
+        await notifyNextInQueue(
+          freed.facilityType,
+          freed.bookingType,
+          freed.equipmentType,
+          freed.date,
+          freed.startTime,
+          freed.duration
+        )
+      }
     }
 
     return NextResponse.json({

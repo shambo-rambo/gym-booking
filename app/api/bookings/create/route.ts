@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
+import { randomUUID } from "crypto"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
-import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
+import { FacilityType, BookingType, EquipmentType, User } from "@prisma/client"
 import { z } from "zod"
 import {
   validateBookingTime,
@@ -10,6 +11,7 @@ import {
   checkDailyLimit,
   checkSessionLimit,
   parseSlotDateTime,
+  EXCLUSIVE_TYPES,
 } from "@/lib/booking-rules"
 import { sendNotification } from "@/lib/notifications"
 import { format } from "date-fns"
@@ -19,7 +21,7 @@ export const dynamic = 'force-dynamic'
 
 const createBookingSchema = z.object({
   facilityType: z.enum(["GYM", "SAUNA", "LIBRARY"]),
-  bookingType: z.enum(["EXCLUSIVE", "SHARED"]).optional(),
+  bookingType: z.enum(["EXCLUSIVE", "SHARED", "EXCLUSIVE_BOTH"]).optional(),
   equipmentType: z.enum([
     "WEIGHTS_MACHINE",
     "FREE_DUMBBELLS",
@@ -32,6 +34,112 @@ const createBookingSchema = z.object({
   endTime: z.string().optional(), // Library only
   duration: z.number().optional(), // Required for GYM/SAUNA
 })
+
+// Creates a linked pair of Booking rows (one GYM, one SAUNA) sharing a groupId, so the
+// whole slot is locked on both facilities at once. Follows the same rules as a plain
+// Private (EXCLUSIVE) booking, just checked/applied against both facilities together.
+async function createExclusiveBothBooking(
+  user: User,
+  userId: string,
+  requestedFacilityType: FacilityType,
+  date: Date,
+  startTime: string,
+  duration: number
+) {
+  const timeValidation = validateBookingTime(date, startTime, duration)
+  if (!timeValidation.allowed) {
+    return NextResponse.json({ error: timeValidation.reason }, { status: 400 })
+  }
+
+  const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - Date.now()) / (1000 * 60)
+  const isLastMinute = minutesUntilSlot <= 180
+
+  if (!isLastMinute) {
+    const facilities = [FacilityType.GYM, FacilityType.SAUNA] as const
+    const results = await Promise.all(
+      facilities.flatMap((facility) => [
+        checkSessionLimit(userId, facility).then((r) => ({ ...r, facility })),
+        checkDailyLimit(userId, facility, date, startTime, duration).then((r) => ({ ...r, facility })),
+        checkConsecutiveDays(userId, facility, date, startTime).then((r) => ({ ...r, facility })),
+      ])
+    )
+    const failed = results.find((r) => !r.allowed)
+    if (failed) {
+      const label = failed.facility === FacilityType.GYM ? "Gym" : "Sauna"
+      return NextResponse.json({ error: `${label}: ${failed.reason}` }, { status: 400 })
+    }
+  }
+
+  try {
+    const bookings = await prisma.$transaction(async (tx) => {
+      const [slotHour, slotMinute] = startTime.split(':').map(Number)
+      const slotStart = slotHour * 60 + slotMinute
+      const slotEnd = slotStart + duration
+
+      const overlaps = (existing: { startTime: string; duration: number }[]) =>
+        existing.some((b) => {
+          const [bh, bm] = b.startTime.split(':').map(Number)
+          const bStart = bh * 60 + bm
+          return bStart < slotEnd && bStart + b.duration > slotStart
+        })
+
+      const [gymBlocked, saunaBlocked, gymBookings, saunaBookings] = await Promise.all([
+        tx.blockedSlot.findFirst({ where: { facilityType: FacilityType.GYM, date, startTime, duration } }),
+        tx.blockedSlot.findFirst({ where: { facilityType: FacilityType.SAUNA, date, startTime, duration } }),
+        tx.booking.findMany({ where: { facilityType: FacilityType.GYM, date } }),
+        tx.booking.findMany({ where: { facilityType: FacilityType.SAUNA, date } }),
+      ])
+
+      if (gymBlocked) throw new Error(`Gym: ${gymBlocked.reason}`)
+      if (saunaBlocked) throw new Error(`Sauna: ${saunaBlocked.reason}`)
+      if (overlaps(gymBookings)) throw new Error("Gym: Slot is already booked.")
+      if (overlaps(saunaBookings)) throw new Error("Sauna: Slot is already booked.")
+
+      const groupId = randomUUID()
+      const shared = { userId, bookingType: BookingType.EXCLUSIVE_BOTH, date, startTime, duration, groupId }
+
+      return Promise.all([
+        tx.booking.create({ data: { ...shared, facilityType: FacilityType.GYM } }),
+        tx.booking.create({ data: { ...shared, facilityType: FacilityType.SAUNA } }),
+      ])
+    }, { maxWait: 5000, timeout: 10000 })
+
+    // Clean up any queue entries the user had for this slot on either facility
+    prisma.queueEntry.deleteMany({
+      where: { userId, facilityType: { in: [FacilityType.GYM, FacilityType.SAUNA] }, date, startTime, duration }
+    }).catch((err) => console.error('[Booking] Queue cleanup failed:', err))
+
+    sendNotification(user, 'BOOKING_CONFIRMATION', {
+      facilityType: 'Gym & Sauna',
+      bookingType: 'Exclusive',
+      date: format(date, 'EEEE, MMMM d, yyyy'),
+      startTime,
+      duration,
+    }).catch((err) => console.error('[Booking] Notification failed:', err))
+
+    const primary = bookings.find((b) => b.facilityType === requestedFacilityType) ?? bookings[0]
+
+    return NextResponse.json({
+      success: true,
+      booking: {
+        id: primary.id,
+        facilityType: primary.facilityType,
+        bookingType: primary.bookingType,
+        equipmentType: null,
+        date: primary.date,
+        startTime: primary.startTime,
+        duration: primary.duration,
+        createdAt: primary.createdAt,
+      },
+      linkedBookings: bookings.map((b) => ({ id: b.id, facilityType: b.facilityType })),
+    })
+  } catch (transactionError: any) {
+    return NextResponse.json(
+      { error: transactionError.message || "Slot just became unavailable. Please try another." },
+      { status: 409 }
+    )
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -166,6 +274,17 @@ export async function POST(request: NextRequest) {
     }
     const duration = rawDuration
 
+    // ── Exclusive (Gym + Sauna together) booking ─────────────────────────────
+    if (bookingType === BookingType.EXCLUSIVE_BOTH) {
+      if (equipmentType) {
+        return NextResponse.json(
+          { error: "Equipment type is not applicable for an exclusive booking." },
+          { status: 400 }
+        )
+      }
+      return createExclusiveBothBooking(user, userId, facilityType as FacilityType, date, startTime, duration)
+    }
+
     // Validation 1: Equipment type required for shared gym bookings
     if (
       facilityType === FacilityType.GYM &&
@@ -233,7 +352,7 @@ export async function POST(request: NextRequest) {
           return bStart < slotEnd && bStart + b.duration > slotStart
         })
 
-        const hasExclusive = overlapping.some(b => b.bookingType === BookingType.EXCLUSIVE)
+        const hasExclusive = overlapping.some(b => EXCLUSIVE_TYPES.includes(b.bookingType))
         if (hasExclusive) throw new Error("Slot has an exclusive booking.")
 
         if (bookingType === BookingType.EXCLUSIVE) {

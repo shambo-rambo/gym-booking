@@ -4,8 +4,6 @@ import { prisma } from "@/lib/prisma"
 import { resolveNoticeRecipients } from "@/lib/notice-targeting"
 import { z } from "zod"
 
-const SMS_COST_ESTIMATE = 0.06 // AUD per message, matches the ClickSend fallback estimate in lib/notifications.ts
-
 const previewSchema = z.object({
   targetType: z.enum(["ALL", "RESIDENCY", "FLOOR", "APARTMENT"]),
   targetValues: z.array(z.string()).default([]),
@@ -27,19 +25,25 @@ export async function POST(request: NextRequest) {
     const recipients = await resolveNoticeRecipients(targetType, targetValues)
     const forceSms = category === "URGENT"
 
-    const emailEligible = recipients.filter(
-      (u) => u.notificationPreference === "EMAIL_ONLY" || u.notificationPreference === "BOTH"
-    ).length
-    const smsEligible = recipients.filter(
-      (u) => u.phoneNumber && (forceSms || u.notificationPreference === "SMS_ONLY" || u.notificationPreference === "BOTH")
-    ).length
+    // Email can't be opted out of for building notices (it's the channel of record for
+    // things like AGM votes) — residents can only opt out of SMS. So every recipient is
+    // email-eligible; SMS eligibility still depends on their preference + having a phone.
+    const recipientDetails = recipients
+      .map((u) => ({
+        id: u.id,
+        name: u.name,
+        apartmentNumber: u.apartmentNumber,
+        smsEligible: !!u.phoneNumber && (forceSms || u.notificationPreference === "SMS_ONLY" || u.notificationPreference === "BOTH"),
+      }))
+      .sort((a, b) => a.apartmentNumber - b.apartmentNumber)
+
+    const smsEligible = recipientDetails.filter((u) => u.smsEligible).length
 
     return NextResponse.json({
       total: recipients.length,
-      emailEligible,
       smsEligible,
       smsForced: forceSms,
-      estimatedSmsCost: Math.round(smsEligible * SMS_COST_ESTIMATE * 100) / 100,
+      recipients: recipientDetails,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {

@@ -13,6 +13,7 @@ export const EQUIPMENT_LIST = Object.entries(EQUIPMENT_LABELS) as [EquipmentType
 const BOOKING_TYPE_LABELS: Record<string, string> = {
   EXCLUSIVE: "Private",
   SHARED: "Shared",
+  EXCLUSIVE_BOTH: "Exclusive",
 }
 
 export function formatBookingType(type: string): string {

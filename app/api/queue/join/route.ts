@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 
 const joinQueueSchema = z.object({
   facilityType: z.enum(["GYM", "SAUNA", "LIBRARY"]),
-  bookingType: z.enum(["EXCLUSIVE", "SHARED"]),
+  bookingType: z.enum(["EXCLUSIVE", "SHARED", "EXCLUSIVE_BOTH"]),
   equipmentType: z.enum([
     "WEIGHTS_MACHINE",
     "FREE_DUMBBELLS",

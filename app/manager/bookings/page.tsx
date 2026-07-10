@@ -207,7 +207,7 @@ export default function ManagerBookingsPage() {
                     <CardTitle className="text-lg">
                       {booking.facilityType === "GYM" ? "Gym" : booking.facilityType === "LIBRARY" ? "Library" : "Sauna"}
                     </CardTitle>
-                    <Badge variant={booking.bookingType === "EXCLUSIVE" ? "default" : "secondary"}>
+                    <Badge variant={booking.bookingType !== "SHARED" ? "default" : "secondary"}>
                       {formatBookingType(booking.bookingType)}
                     </Badge>
                     {booking.equipmentType && (

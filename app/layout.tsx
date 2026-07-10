@@ -10,13 +10,13 @@ const manrope = Manrope({
 })
 
 export const metadata: Metadata = {
-  title: "Gym & Sauna Booking",
+  title: "The Watertower",
   description: "Book gym and sauna facilities for your apartment building",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Gym Booking",
+    title: "The Watertower",
   },
   other: {
     "mobile-web-app-capable": "yes",

@@ -33,7 +33,7 @@ export default function Navbar() {
 
   const isManager = (session?.user as any)?.role === "MANAGER"
   const isAdminView = isManager && mode === "ADMIN"
-  const pageTitle = PAGE_TITLES[pathname] ?? "The Residences"
+  const pageTitle = PAGE_TITLES[pathname] ?? "The Watertower"
 
   const initials = session?.user?.name
     ?.split(" ")
@@ -64,7 +64,7 @@ export default function Navbar() {
         style={{ height: "64px" }}>
         <div>
           <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-secondary">
-            The Residences
+            The Watertower
           </p>
           <h1 className="text-base font-bold tracking-tight text-primary leading-tight">
             Amenity Booking
@@ -93,7 +93,7 @@ export default function Navbar() {
       >
         <div>
           <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-secondary leading-none mb-0.5">
-            The Residences
+            The Watertower
           </p>
           <h1 className="text-base font-bold tracking-tight text-primary leading-tight">
             {pageTitle}

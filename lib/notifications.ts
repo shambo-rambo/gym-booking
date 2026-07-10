@@ -80,7 +80,7 @@ async function sendEmail(
 
   try {
     await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'Gym Booking <onboarding@resend.dev>',
+      from: process.env.RESEND_FROM_EMAIL || 'The Watertower <onboarding@resend.dev>',
       to,
       subject,
       html
@@ -261,7 +261,7 @@ function generateNotificationContent(type: NotificationType, data: NotificationD
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #2563eb;">${escapeHtml(title)}</h2>
             <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0; white-space: pre-wrap;">${escapeHtml(body)}</div>
-            <a href="${appUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">Open The Residences</a>
+            <a href="${appUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">Open The Watertower</a>
           </div>
         `,
         // Keep SMS short: title + a truncated body so the total stays close to the 160-char guideline.

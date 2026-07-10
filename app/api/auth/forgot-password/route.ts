@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
         await resend.emails
           .send({
-            from: process.env.RESEND_FROM_EMAIL || "Gym Booking <onboarding@resend.dev>",
+            from: process.env.RESEND_FROM_EMAIL || "The Watertower <onboarding@resend.dev>",
             to: email,
             subject: "Sign in with Google",
             html: `
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       if (resend) {
         await resend.emails
           .send({
-            from: process.env.RESEND_FROM_EMAIL || "Gym Booking <onboarding@resend.dev>",
+            from: process.env.RESEND_FROM_EMAIL || "The Watertower <onboarding@resend.dev>",
             to: email,
             subject: "Reset your password",
             html: `

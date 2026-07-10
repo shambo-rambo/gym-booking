@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
       const safeEmail = newUser.email.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
       await resend.emails
         .send({
-          from: process.env.RESEND_FROM_EMAIL || "Gym Booking <onboarding@resend.dev>",
+          from: process.env.RESEND_FROM_EMAIL || "The Watertower <onboarding@resend.dev>",
           to: managers.map((m) => m.email),
           subject: "New resident registered",
           html: `

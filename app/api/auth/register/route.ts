@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       const isPending = status === "PENDING"
       await resend.emails
         .send({
-          from: process.env.RESEND_FROM_EMAIL || "Gym Booking <onboarding@resend.dev>",
+          from: process.env.RESEND_FROM_EMAIL || "The Watertower <onboarding@resend.dev>",
           to: managers.map((m) => m.email),
           subject: isPending
             ? "New resident registration pending approval"

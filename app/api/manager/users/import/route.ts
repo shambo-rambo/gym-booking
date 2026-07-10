@@ -103,13 +103,13 @@ export async function POST(request: NextRequest) {
       if (resend) {
         await resend.emails
           .send({
-            from: process.env.RESEND_FROM_EMAIL || "The Residences <onboarding@resend.dev>",
+            from: process.env.RESEND_FROM_EMAIL || "The Watertower <onboarding@resend.dev>",
             to: user.email,
-            subject: "Welcome to The Residences — set your password",
+            subject: "Welcome to The Watertower — set your password",
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #4F46E5;">Welcome, ${escapeHtml(user.name)}!</h2>
-                <p>Your building manager has set up your account for The Residences (Unit ${user.apartmentNumber}).</p>
+                <p>Your building manager has set up your account for The Watertower (Unit ${user.apartmentNumber}).</p>
                 <p>Click below to set your password and get started. This link expires in 7 days.</p>
                 <a href="${setPasswordUrl}" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 16px 0;">Set your password</a>
               </div>

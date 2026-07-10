@@ -100,7 +100,7 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-gray-400">The Residences</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-gray-400">The Watertower</p>
           <CardTitle>Set new password</CardTitle>
           <CardDescription>Choose a new password for your account.</CardDescription>
         </CardHeader>

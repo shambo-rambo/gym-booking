@@ -1,6 +1,6 @@
 {
-  "name": "Gym & Sauna Booking",
-  "short_name": "Gym Booking",
+  "name": "The Watertower",
+  "short_name": "Watertower",
   "description": "Book gym and sauna facilities for your apartment building",
   "start_url": "/",
   "display": "standalone",

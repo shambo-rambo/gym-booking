@@ -127,6 +127,14 @@ export default function Navbar() {
                   Settings
                 </Link>
                 <Link
+                  href="/settings/notifications"
+                  onClick={() => setShowSignOut(false)}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors"
+                >
+                  <Bell className="w-4 h-4" />
+                  Notifications
+                </Link>
+                <Link
                   href="/rules"
                   onClick={() => setShowSignOut(false)}
                   className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors"

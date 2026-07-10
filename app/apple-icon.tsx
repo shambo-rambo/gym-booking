@@ -11,19 +11,14 @@ export default function AppleIcon() {
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "#4F46E5",
+          background: "#192830",
           borderRadius: "32px",
-          gap: 4,
         }}
       >
-        <span style={{ color: "white", fontSize: 80, fontWeight: 700, letterSpacing: "-4px", lineHeight: 1 }}>
-          GS
-        </span>
-        <span style={{ color: "rgba(255,255,255,0.75)", fontSize: 22, fontWeight: 400, letterSpacing: "0px" }}>
-          Booking
+        <span style={{ color: "white", fontSize: 100, fontWeight: 700, letterSpacing: "-4px", lineHeight: 1 }}>
+          W
         </span>
       </div>
     ),

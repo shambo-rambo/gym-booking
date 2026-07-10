@@ -292,7 +292,7 @@ function generateNotificationContent(type: NotificationType, data: NotificationD
             <a href="${appUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">Go to Calendar</a>
           </div>
         `,
-        smsBody: `Your gym booking account is verified! Start booking: ${appUrl}`
+        smsBody: `Your Watertower account is verified! Start booking: ${appUrl}`
       }
 
     case 'BOOKING_CANCELLED_BY_ADMIN':

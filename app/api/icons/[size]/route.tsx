@@ -14,10 +14,8 @@ export async function GET(
     return new Response("Invalid size. Use 192 or 512.", { status: 400 })
   }
 
-  const fontSize = Math.round(size * 0.38)
-  const subtitleSize = Math.round(size * 0.12)
+  const fontSize = Math.round(size * 0.5)
   const borderRadius = Math.round(size * 0.17)
-  const gap = Math.round(size * 0.02)
 
   return new ImageResponse(
     (
@@ -26,12 +24,10 @@ export async function GET(
           width: size,
           height: size,
           display: "flex",
-          flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          background: "#4F46E5",
+          background: "#192830",
           borderRadius: `${borderRadius}px`,
-          gap: `${gap}px`,
         }}
       >
         <span
@@ -43,16 +39,7 @@ export async function GET(
             lineHeight: 1,
           }}
         >
-          GS
-        </span>
-        <span
-          style={{
-            color: "rgba(255,255,255,0.75)",
-            fontSize: subtitleSize,
-            fontWeight: 400,
-          }}
-        >
-          Booking
+          W
         </span>
       </div>
     ),

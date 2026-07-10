@@ -76,3 +76,19 @@ env:
 
   # CLICKSEND_SENDER_ID intentionally omitted — optional, unset means ClickSend's default sender.
   # Add back with a `value:` (or `secret:`) once a Sender ID is actually registered.
+
+  - variable: VAPID_PRIVATE_KEY
+    secret: VAPID_PRIVATE_KEY
+    availability:
+      - RUNTIME
+
+  - variable: VAPID_SUBJECT
+    value: "mailto:simon.hamblin@gmail.com"
+    availability:
+      - RUNTIME
+
+  - variable: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+    value: "BFPyuGzL3DuNE3FlzdrIZojcZEhZ_ikNGz6MxXGq0IXthLZMC_mWSDadtq8Z1Sb3n-Ym359WfKCyQXsCt4-fUSw"
+    availability:
+      - BUILD
+      - RUNTIME

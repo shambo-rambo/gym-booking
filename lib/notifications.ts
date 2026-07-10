@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { prisma } from './prisma'
-import { NotificationType, NotificationChannel, User } from '@prisma/client'
+import { NotificationType, NotificationChannel, NotificationCategory, User } from '@prisma/client'
+import { sendPush } from './push'
 
 // Initialize services (will only work if env vars are set)
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
@@ -22,14 +23,58 @@ interface NotificationData {
   reason?: string
   title?: string
   body?: string
+  // Only set (and only relevant) for BUILDING_MESSAGE — carries the Announcement's
+  // category so per-category NotificationSetting rows can be looked up.
+  category?: NotificationCategory
 }
 
 interface ChannelOverride {
   email?: boolean
   sms?: boolean
   // If true, SMS sends to anyone with a phone number regardless of their
-  // notificationPreference — used for Urgent building messages only.
+  // notification settings — used for Urgent building messages only.
   forceSms?: boolean
+}
+
+// Booking/queue notification types all fall under one resident-facing "Bookings"
+// settings category. BUILDING_MESSAGE carries its own category via `data.category`.
+// ACCOUNT_VERIFIED is transactional and stays outside the settings system entirely.
+function resolveCategory(type: NotificationType, data: NotificationData): NotificationCategory | null {
+  switch (type) {
+    case 'BOOKING_CONFIRMATION':
+    case 'BOOKING_REMINDER':
+    case 'BOOKING_CANCELLED_BY_ADMIN':
+    case 'QUEUE_SLOT_AVAILABLE':
+    case 'QUEUE_POSITION_UPDATE':
+      return 'BOOKINGS'
+    case 'BUILDING_MESSAGE':
+      return data.category ?? 'GENERAL'
+    case 'ACCOUNT_VERIFIED':
+    default:
+      return null
+  }
+}
+
+function defaultSettingFor(category: NotificationCategory) {
+  if (category === 'URGENT') {
+    return { email: true, sms: true, push: true }
+  }
+  return { email: true, sms: false, push: true }
+}
+
+// Looks up a user's stored per-category preference, falling back to sensible
+// defaults if no row exists yet (e.g. between a schema push and the backfill
+// script running). Urgent's email/sms are always forced on regardless of what's
+// stored — residents can't opt out of serious/safety communications.
+export async function getEffectiveSetting(userId: string, category: NotificationCategory) {
+  const row = await prisma.notificationSetting.findUnique({
+    where: { userId_category: { userId, category } },
+  })
+  const effective = row ?? defaultSettingFor(category)
+  if (category === 'URGENT') {
+    return { email: true, sms: true, push: effective.push }
+  }
+  return effective
 }
 
 export async function sendNotification(
@@ -38,31 +83,44 @@ export async function sendNotification(
   data: NotificationData,
   channelOverride?: ChannelOverride
 ) {
-  const { notificationPreference } = user
-  const emailAllowed = channelOverride?.email ?? true
-  const smsAllowed = channelOverride?.sms ?? true
-  const prefAllowsEmail = notificationPreference === 'EMAIL_ONLY' || notificationPreference === 'BOTH'
-  const prefAllowsSms = notificationPreference === 'SMS_ONLY' || notificationPreference === 'BOTH'
-
+  const category = resolveCategory(type, data)
   const content = generateNotificationContent(type, data)
 
-  // Building-wide notices (AGM votes, maintenance, etc.) are always delivered by email —
-  // residents can opt out of SMS for these, but not email. Other notification types
-  // still respect the resident's per-channel preference.
-  const emailGate = type === 'BUILDING_MESSAGE' ? true : prefAllowsEmail
+  const emailAllowed = channelOverride?.email ?? true
+  const smsAllowed = channelOverride?.sms ?? true
 
-  // Send via email
+  let emailGate: boolean
+  let smsGate: boolean
+  let pushGate: boolean
+
+  if (category) {
+    const setting = await getEffectiveSetting(user.id, category)
+    emailGate = setting.email
+    smsGate = channelOverride?.forceSms || setting.sms
+    pushGate = setting.push
+  } else {
+    // ACCOUNT_VERIFIED: unaffected by the per-category settings system, preserves
+    // the original always-email / preference-based-SMS behaviour.
+    const prefAllowsEmail = user.notificationPreference === 'EMAIL_ONLY' || user.notificationPreference === 'BOTH'
+    const prefAllowsSms = user.notificationPreference === 'SMS_ONLY' || user.notificationPreference === 'BOTH'
+    emailGate = prefAllowsEmail
+    smsGate = channelOverride?.forceSms || prefAllowsSms
+    pushGate = false
+  }
+
   if (emailAllowed && emailGate) {
     await sendEmail(user.email, content.subject, content.emailBody, user.id, type)
   }
 
-  // Send via SMS
-  if (
-    smsAllowed &&
-    user.phoneNumber &&
-    (channelOverride?.forceSms || prefAllowsSms)
-  ) {
+  if (smsAllowed && user.phoneNumber && smsGate) {
     await sendSMS(user.phoneNumber, content.smsBody, user.id, type)
+  }
+
+  // Push is orthogonal to the email/sms cascade above (which exists to avoid
+  // double-notifying for cost-bearing channels) — it fires independently
+  // whenever the resident's per-category push toggle is on.
+  if (pushGate) {
+    await sendPush(user, type, data, content)
   }
 }
 
@@ -281,7 +339,7 @@ function generateNotificationContent(type: NotificationType, data: NotificationD
   }
 }
 
-async function logNotification(
+export async function logNotification(
   userId: string,
   type: NotificationType,
   channel: NotificationChannel,

@@ -33,5 +33,11 @@ export default auth((req) => {
 })
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp)$).*)"],
+  // Service worker files (sw.js, its workbox runtime, and the custom push-handling
+  // worker chunk) must always be fetchable regardless of auth state — the browser
+  // registers/updates them from public pages too, and a redirected response breaks
+  // registration entirely.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|manifest.json|sw\\.js|sw\\.js\\.map|workbox-.*\\.js|workbox-.*\\.js\\.map|worker-.*\\.js|swe-worker-.*\\.js|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp)$).*)",
+  ],
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { redirect, useRouter } from "next/navigation"
+import Link from "next/link"
 import Navbar from "@/components/Navbar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -292,7 +293,12 @@ export default function SettingsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Notification Preferences</CardTitle>
-              <CardDescription>Choose how you receive booking and queue notifications.</CardDescription>
+              <CardDescription>
+                Choose how you receive booking and queue notifications.{" "}
+                <Link href="/settings/notifications" className="underline font-medium text-primary">
+                  Manage text, email, and push notifications by category →
+                </Link>
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">

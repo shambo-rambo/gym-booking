@@ -99,16 +99,19 @@ export async function POST(request: NextRequest) {
     // like AGM votes). Urgent messages force SMS to anyone with a phone on file.
     for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
       const batch = recipients.slice(i, i + BATCH_SIZE)
+      const batchSettings = await prisma.notificationSetting.findMany({
+        where: { userId: { in: batch.map((u) => u.id) }, category: data.category },
+      })
+      const smsByUserId = new Map(batchSettings.map((s) => [s.userId, s.sms]))
+
       await Promise.all(
         batch.map((user) => {
-          const textEligible =
-            data.sendSms &&
-            !!user.phoneNumber &&
-            (forceSms || user.notificationPreference === "SMS_ONLY" || user.notificationPreference === "BOTH")
+          const smsAllowed = smsByUserId.get(user.id) ?? false
+          const textEligible = data.sendSms && !!user.phoneNumber && (forceSms || smsAllowed)
           return sendNotification(
             user,
             "BUILDING_MESSAGE",
-            { title: data.title, body: data.message },
+            { title: data.title, body: data.message, category: data.category },
             { email: !textEligible, sms: textEligible, forceSms }
           ).catch((err) => console.error("[Messages] Notification failed for", user.id, err))
         })

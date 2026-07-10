@@ -30,6 +30,8 @@ model User {
   announcementsCreated   Announcement[]
   passwordResetTokens    PasswordResetToken[]
   noticeRecipients       NoticeRecipient[]
+  notificationSettings   NotificationSetting[]
+  pushSubscriptions      PushSubscription[]
 
   @@index([apartmentNumber])
   @@index([status])
@@ -233,4 +235,39 @@ enum NotificationType {
 enum NotificationChannel {
   EMAIL
   SMS
+  PUSH
+}
+
+enum NotificationCategory {
+  BOOKINGS
+  AMENITY
+  MAINTENANCE
+  URGENT
+  GENERAL
+}
+
+model NotificationSetting {
+  id        String               @id @default(cuid())
+  userId    String
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category  NotificationCategory
+  email     Boolean              @default(true)
+  sms       Boolean              @default(false)
+  push      Boolean              @default(true)
+  updatedAt DateTime             @updatedAt
+
+  @@unique([userId, category])
+  @@index([userId])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

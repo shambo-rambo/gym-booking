@@ -37,6 +37,8 @@ next-env.d.ts
 /public/workbox-*.js.map
 /public/swe-worker-*.js
 /public/swe-worker-*.js.map
+/public/worker-*.js
+/public/worker-*.js.map
 .claude/
 client_secret*.json
 playwright-report/

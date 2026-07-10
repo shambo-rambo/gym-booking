@@ -78,6 +78,16 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    await prisma.notificationSetting.createMany({
+      data: [
+        { userId: user.id, category: "BOOKINGS", email: true, sms: false, push: true },
+        { userId: user.id, category: "AMENITY", email: true, sms: false, push: true },
+        { userId: user.id, category: "MAINTENANCE", email: true, sms: false, push: true },
+        { userId: user.id, category: "URGENT", email: true, sms: true, push: true },
+        { userId: user.id, category: "GENERAL", email: true, sms: false, push: true },
+      ],
+    })
+
     // Notify managers of all new registrations
     const managers = await prisma.user.findMany({
       where: { role: "MANAGER" },

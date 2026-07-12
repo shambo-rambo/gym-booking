@@ -29,6 +29,16 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/onboarding", req.url))
   }
 
+  if (
+    session?.user &&
+    (session.user as any).mustChangePassword === true &&
+    pathname !== "/change-password" &&
+    !pathname.startsWith("/api/") &&
+    !pathname.startsWith("/_next")
+  ) {
+    return NextResponse.redirect(new URL("/change-password", req.url))
+  }
+
   return NextResponse.next()
 })
 

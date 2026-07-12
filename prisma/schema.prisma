@@ -21,6 +21,9 @@ model User {
   notificationPreference NotificationPreference @default(EMAIL_ONLY)
   residencyType          ResidencyType?
   fobNumber              String?
+  assistantMessagesToday Int      @default(0)
+  assistantUsageDate     DateTime?
+  mustChangePassword     Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 

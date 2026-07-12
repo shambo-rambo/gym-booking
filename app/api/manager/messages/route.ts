@@ -61,16 +61,23 @@ export async function POST(request: NextRequest) {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-    const manager = await prisma.user.findUnique({ where: { id: (session.user as any).id } })
+
+    const data = sendSchema.parse(await request.json())
+
+    // The manager-permission check and resolving recipients are independent
+    // reads — run them concurrently instead of one after the other. If the
+    // manager check fails below, the (unused) recipients result is just
+    // discarded — it's read-only, so there's no side effect to worry about.
+    const [manager, resolvedRecipients] = await Promise.all([
+      prisma.user.findUnique({ where: { id: (session.user as any).id } }),
+      resolveNoticeRecipients(data.targetType, data.targetValues),
+    ])
     if (!manager || manager.role !== "MANAGER") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const data = sendSchema.parse(await request.json())
     const excluded = new Set(data.excludedUserIds)
-    const recipients = (await resolveNoticeRecipients(data.targetType, data.targetValues)).filter(
-      (u) => !excluded.has(u.id)
-    )
+    const recipients = resolvedRecipients.filter((u) => !excluded.has(u.id))
     const forceSms = data.category === "URGENT"
 
     const notice = await prisma.announcement.create({
@@ -97,26 +104,34 @@ export async function POST(request: NextRequest) {
     // Cascade per resident: text wins if they're reachable by SMS, otherwise they always
     // get the email (residents can opt out of SMS but not email — email carries things
     // like AGM votes). Urgent messages force SMS to anyone with a phone on file.
-    for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
-      const batch = recipients.slice(i, i + BATCH_SIZE)
-      const batchSettings = await prisma.notificationSetting.findMany({
-        where: { userId: { in: batch.map((u) => u.id) }, category: data.category },
-      })
-      const smsByUserId = new Map(batchSettings.map((s) => [s.userId, s.sms]))
-
-      await Promise.all(
-        batch.map((user) => {
-          const smsAllowed = smsByUserId.get(user.id) ?? false
-          const textEligible = data.sendSms && !!user.phoneNumber && (forceSms || smsAllowed)
-          return sendNotification(
-            user,
-            "BUILDING_MESSAGE",
-            { title: data.title, body: data.message, category: data.category },
-            { email: !textEligible, sms: textEligible, forceSms }
-          ).catch((err) => console.error("[Messages] Notification failed for", user.id, err))
+    //
+    // Not awaited: the message is already saved (notice + recipients created above), so
+    // the manager doesn't need to wait for every email/SMS to actually go out before
+    // getting a response — that was adding the full Resend/ClickSend round-trip time
+    // per batch to the request. Sends continue in the background; same fire-and-forget
+    // pattern already used for the ACCOUNT_VERIFIED notification in the users route.
+    ;(async () => {
+      for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+        const batch = recipients.slice(i, i + BATCH_SIZE)
+        const batchSettings = await prisma.notificationSetting.findMany({
+          where: { userId: { in: batch.map((u) => u.id) }, category: data.category },
         })
-      )
-    }
+        const smsByUserId = new Map(batchSettings.map((s) => [s.userId, s.sms]))
+
+        await Promise.all(
+          batch.map((user) => {
+            const smsAllowed = smsByUserId.get(user.id) ?? false
+            const textEligible = data.sendSms && !!user.phoneNumber && (forceSms || smsAllowed)
+            return sendNotification(
+              user,
+              "BUILDING_MESSAGE",
+              { title: data.title, body: data.message, category: data.category },
+              { email: !textEligible, sms: textEligible, forceSms }
+            ).catch((err) => console.error("[Messages] Notification failed for", user.id, err))
+          })
+        )
+      }
+    })().catch((err) => console.error("[Messages] Notification fan-out failed:", err))
 
     return NextResponse.json({ success: true, noticeId: notice.id, recipientCount: recipients.length })
   } catch (error) {

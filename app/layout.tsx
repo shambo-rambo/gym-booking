@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next"
 import { Manrope } from "next/font/google"
 import "./globals.css"
 import SessionProvider from "@/components/SessionProvider"
+import SpotlightOnce from "@/components/SpotlightOnce"
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -39,7 +40,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={manrope.className} suppressHydrationWarning>
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          {children}
+          <SpotlightOnce />
+        </SessionProvider>
       </body>
     </html>
   )

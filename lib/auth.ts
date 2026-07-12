@@ -33,7 +33,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!passwordMatch) return null
         if (user.status !== "VERIFIED") return null
 
-        return { id: user.id, email: user.email, name: user.name, role: user.role }
+        return { id: user.id, email: user.email, name: user.name, role: user.role, mustChangePassword: user.mustChangePassword }
       },
     }),
   ],
@@ -55,6 +55,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.id = user.id
         token.role = (user as any).role
         token.needsOnboarding = false
+        token.mustChangePassword = (user as any).mustChangePassword
       }
 
       // Google sign-in — check if user exists in our DB
@@ -66,13 +67,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.id = dbUser.id
           token.role = dbUser.role
           token.needsOnboarding = false
+          token.mustChangePassword = dbUser.mustChangePassword
         } else {
           // New Google user — needs to complete onboarding
           token.needsOnboarding = true
         }
       }
 
-      // After onboarding completes, re-check DB
+      // After onboarding or a forced password change completes, re-check DB
       if (trigger === "update" && (token.needsOnboarding || (session as any)?.recheck)) {
         const dbUser = await prisma.user.findUnique({
           where: { email: token.email! },
@@ -81,6 +83,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.id = dbUser.id
           token.role = dbUser.role
           token.needsOnboarding = false
+          token.mustChangePassword = dbUser.mustChangePassword
         }
       }
 
@@ -91,6 +94,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         (session.user as any).id = token.id as string
         (session.user as any).role = token.role as string
         (session.user as any).needsOnboarding = token.needsOnboarding as boolean
+        ;(session.user as any).mustChangePassword = token.mustChangePassword as boolean
       }
       return session
     },

@@ -54,7 +54,7 @@ export default function BookPage() {
             Reserve Your Space
           </h2>
 
-          <div className="flex gap-3 flex-wrap mb-5">
+          <div data-highlight="book-amenity-tabs" className="flex gap-3 flex-wrap mb-5">
             {AMENITIES.map(({ value, label }) => (
               <button
                 key={value}

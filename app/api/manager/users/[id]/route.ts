@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { sendNotification } from "@/lib/notifications"
 import { z } from "zod"
+import bcrypt from "bcryptjs"
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,7 @@ const editUserSchema = z.object({
   residencyType: z.enum(["TENANT", "OWNER_OCCUPIER", "NON_RESIDENT_OWNER"]).nullable().optional(),
   fobNumber: z.string().nullable().optional(),
   notificationPreference: z.enum(["EMAIL_ONLY", "SMS_ONLY", "BOTH"]).optional(),
+  newPassword: z.string().min(8).optional(),
 })
 
 export async function PATCH(
@@ -75,9 +77,10 @@ export async function PATCH(
       })
     }
 
+    const { password: _password, ...safeUser } = updatedUser
     return NextResponse.json({
       success: true,
-      user: updatedUser
+      user: safeUser
     })
 
   } catch (error) {
@@ -133,6 +136,10 @@ export async function PUT(
       )
     }
 
+    const passwordUpdate = data.newPassword
+      ? { password: await bcrypt.hash(data.newPassword, 10), mustChangePassword: true }
+      : {}
+
     const updatedUser = await prisma.user.update({
       where: { id: params.id },
       data: {
@@ -143,10 +150,12 @@ export async function PUT(
         residencyType: data.residencyType ?? null,
         fobNumber: data.fobNumber ?? null,
         notificationPreference: data.notificationPreference,
+        ...passwordUpdate,
       }
     })
 
-    return NextResponse.json({ success: true, user: updatedUser })
+    const { password: _password, ...safeUpdatedUser } = updatedUser
+    return NextResponse.json({ success: true, user: safeUpdatedUser })
 
   } catch (error) {
     if (error instanceof z.ZodError) {

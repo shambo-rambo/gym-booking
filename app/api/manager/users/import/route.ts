@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { VALID_UNITS } from "@/lib/apartments"
 import bcrypt from "bcryptjs"
-import crypto from "crypto"
 import { z } from "zod"
 import { Resend } from "resend"
 
@@ -73,15 +72,14 @@ export async function POST(request: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
     const created: { email: string; name: string }[] = []
+    const defaultPasswordHash = await bcrypt.hash("watertower", 10)
 
     for (const row of rows) {
-      const randomPassword = crypto.randomBytes(16).toString("hex")
-      const hashedPassword = await bcrypt.hash(randomPassword, 10)
-
       const user = await prisma.user.create({
         data: {
           email: row.email.toLowerCase(),
-          password: hashedPassword,
+          password: defaultPasswordHash,
+          mustChangePassword: true,
           name: row.name,
           apartmentNumber: row.apartmentNumber,
           phoneNumber: row.mobile || null,
@@ -93,25 +91,19 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      const rawToken = crypto.randomBytes(32).toString("hex")
-      const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex")
-      await prisma.passwordResetToken.create({
-        data: { userId: user.id, tokenHash, expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) },
-      })
-      const setPasswordUrl = `${appUrl}/reset-password?token=${rawToken}`
-
       if (resend) {
         await resend.emails
           .send({
             from: process.env.RESEND_FROM_EMAIL || "The Watertower <onboarding@resend.dev>",
             to: user.email,
-            subject: "Welcome to The Watertower — set your password",
+            subject: "Welcome to The Watertower",
             html: `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #4F46E5;">Welcome, ${escapeHtml(user.name)}!</h2>
                 <p>Your building manager has set up your account for The Watertower (Unit ${user.apartmentNumber}).</p>
-                <p>Click below to set your password and get started. This link expires in 7 days.</p>
-                <a href="${setPasswordUrl}" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 16px 0;">Set your password</a>
+                <p>Log in with your email and this temporary password: <strong>watertower</strong></p>
+                <p>You'll be asked to set your own password the first time you log in.</p>
+                <a href="${appUrl}/login" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 16px 0;">Log in</a>
               </div>
             `,
           })

@@ -341,7 +341,7 @@ export default function MessagesPage() {
 
         {step === 1 && (
           <div>
-            <h2 className="text-lg font-bold mb-4">What kind of message is this?</h2>
+            <h2 data-highlight="message-category" className="text-lg font-bold mb-4">What kind of message is this?</h2>
             <div className="grid grid-cols-1 gap-3">
               {CATEGORY_OPTIONS.map((opt) => (
                 <button

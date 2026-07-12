@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { useAppMode } from "@/lib/use-app-mode"
 import { cn } from "@/lib/utils"
 import { Shield, Home } from "lucide-react"
@@ -9,11 +10,18 @@ import { Shield, Home } from "lucide-react"
 // shifts every page's content padding.
 export default function ModeBanner() {
   const [mode, setMode] = useAppMode()
+  const router = useRouter()
   const isAdmin = mode === "ADMIN"
+
+  const toggle = () => {
+    const next = isAdmin ? "RESIDENT" : "ADMIN"
+    setMode(next)
+    router.push(next === "ADMIN" ? "/manager" : "/")
+  }
 
   return (
     <button
-      onClick={() => setMode(isAdmin ? "RESIDENT" : "ADMIN")}
+      onClick={toggle}
       className={cn(
         "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wide transition-colors active:scale-95",
         isAdmin ? "bg-amber-500 text-amber-950" : "bg-secondary text-on-secondary"

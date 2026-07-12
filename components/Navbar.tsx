@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useSession, signOut } from "next-auth/react"
-import { CalendarDays, BookOpen, Clock, User, Shield, LogOut, Home, BookText, Settings, Bell, Users, MessageSquare } from "lucide-react"
+import { CalendarDays, BookOpen, Clock, User, Shield, LogOut, Home, BookText, Settings, Bell, Users, MessageSquare, CircleHelp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 import { useAppMode } from "@/lib/use-app-mode"
@@ -21,6 +21,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/manager/blocked-slots":  "Blocked Slots",
   "/manager/messages":       "Messages",
   "/manager/qr-code":        "Registration QR Code",
+  "/help":                   "Help (beta)",
 }
 
 export default function Navbar() {
@@ -141,6 +142,14 @@ export default function Navbar() {
                 >
                   <BookText className="w-4 h-4" />
                   Booking Rules
+                </Link>
+                <Link
+                  href="/help"
+                  onClick={() => setShowSignOut(false)}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-sm font-medium text-on-surface-variant hover:bg-surface-container-low transition-colors"
+                >
+                  <CircleHelp className="w-4 h-4" />
+                  Help (beta)
                 </Link>
                 <button
                   onClick={() => { setShowSignOut(false); signOut() }}

@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { CheckCircle, XCircle, Mail, Phone, Home, Search, Pencil, QrCode, Upload } from "lucide-react"
+import { CheckCircle, XCircle, Mail, Phone, Home, Search, Pencil, QrCode, UserPlus, RotateCcw } from "lucide-react"
 import { getFloorFromApartmentNumber, VALID_UNITS } from "@/lib/apartments"
 
 type User = {
@@ -77,13 +77,14 @@ export default function ManagerUsersPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name: "", email: "", apartmentNumber: "", phoneNumber: "", residencyType: "", fobNumber: "", notificationPreference: "EMAIL_ONLY" })
+  const [editForm, setEditForm] = useState({ name: "", email: "", apartmentNumber: "", phoneNumber: "", residencyType: "", fobNumber: "", notificationPreference: "EMAIL_ONLY", newPassword: "" })
   const [editError, setEditError] = useState("")
   const [importOpen, setImportOpen] = useState(false)
   const [importText, setImportText] = useState("")
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState("")
   const [importSuccess, setImportSuccess] = useState("")
+  const [singleForm, setSingleForm] = useState({ name: "", email: "", apartmentNumber: "", phoneNumber: "", residencyType: "", fobNumber: "" })
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login")
@@ -163,11 +164,16 @@ export default function ManagerUsersPage() {
       residencyType: user.residencyType ?? "",
       fobNumber: user.fobNumber ?? "",
       notificationPreference: user.notificationPreference ?? "EMAIL_ONLY",
+      newPassword: "",
     })
   }
 
   const handleSaveEdit = async (userId: string) => {
     setEditError("")
+    if (editForm.newPassword && editForm.newPassword.length < 8) {
+      setEditError("New password must be at least 8 characters")
+      return
+    }
     setActionLoading(userId)
     try {
       const response = await fetch(`/api/manager/users/${userId}`, {
@@ -181,6 +187,7 @@ export default function ManagerUsersPage() {
           residencyType: editForm.residencyType || null,
           fobNumber: editForm.fobNumber || null,
           notificationPreference: editForm.notificationPreference,
+          newPassword: editForm.newPassword || undefined,
         }),
       })
       const data = await response.json()
@@ -197,6 +204,52 @@ export default function ManagerUsersPage() {
     }
   }
 
+  const submitImportRows = async (rows: ReturnType<typeof parseImportCsv>) => {
+    const response = await fetch("/api/manager/users/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    })
+    const data = await response.json()
+    if (!response.ok) {
+      const detail = Array.isArray(data.details)
+        ? data.details.map((d: any) => (d.row ? `Row ${d.row}: ${d.message}` : d)).join("; ")
+        : ""
+      setImportError(`${data.error}${detail ? " — " + detail : ""}`)
+      return false
+    }
+    setImportSuccess(`Added ${data.created.length} resident(s). They can log in now with the temporary password "watertower" and will be asked to set their own on first login.`)
+    await fetchUsers()
+    return true
+  }
+
+  const handleAddSingle = async () => {
+    setImportError("")
+    setImportSuccess("")
+    if (!singleForm.name.trim() || !singleForm.email.trim() || !singleForm.apartmentNumber || !singleForm.residencyType) {
+      setImportError("Name, email, unit, and residency type are required.")
+      return
+    }
+    setImporting(true)
+    try {
+      const ok = await submitImportRows([
+        {
+          name: singleForm.name.trim(),
+          email: singleForm.email.trim(),
+          apartmentNumber: parseInt(singleForm.apartmentNumber, 10),
+          mobile: singleForm.phoneNumber || undefined,
+          residencyType: singleForm.residencyType,
+          fobNumber: singleForm.fobNumber || undefined,
+        },
+      ])
+      if (ok) setSingleForm({ name: "", email: "", apartmentNumber: "", phoneNumber: "", residencyType: "", fobNumber: "" })
+    } catch {
+      setImportError("Could not add that resident.")
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const handleImport = async () => {
     setImportError("")
     setImportSuccess("")
@@ -207,22 +260,8 @@ export default function ManagerUsersPage() {
         setImportError("Paste at least one row.")
         return
       }
-      const response = await fetch("/api/manager/users/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows }),
-      })
-      const data = await response.json()
-      if (!response.ok) {
-        const detail = Array.isArray(data.details)
-          ? data.details.map((d: any) => (d.row ? `Row ${d.row}: ${d.message}` : d)).join("; ")
-          : ""
-        setImportError(`${data.error}${detail ? " — " + detail : ""}`)
-        return
-      }
-      setImportSuccess(`Imported ${data.created.length} resident(s). They'll each get an email to set their password.`)
-      setImportText("")
-      await fetchUsers()
+      const ok = await submitImportRows(rows)
+      if (ok) setImportText("")
     } catch {
       setImportError("Could not parse or import that data.")
     } finally {
@@ -310,6 +349,16 @@ export default function ManagerUsersPage() {
               <Input type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} />
             </div>
             <div className="space-y-1">
+              <Label>New password (optional)</Label>
+              <Input
+                type="password"
+                placeholder="Leave blank to keep current password"
+                value={editForm.newPassword}
+                onChange={(e) => setEditForm((f) => ({ ...f, newPassword: e.target.value }))}
+              />
+              <p className="text-xs text-gray-500">Resident will be asked to set their own password on next login.</p>
+            </div>
+            <div className="space-y-1">
               <Label>Phone (optional)</Label>
               <Input type="tel" placeholder="+61..." value={editForm.phoneNumber} onChange={(e) => setEditForm((f) => ({ ...f, phoneNumber: e.target.value }))} />
             </div>
@@ -391,6 +440,17 @@ export default function ManagerUsersPage() {
                   Deactivate
                 </Button>
               )}
+              {user.status === "DEACTIVATED" && (
+                <Button
+                  onClick={() => handleVerify(user.id)}
+                  disabled={actionLoading === user.id}
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Reactivate
+                </Button>
+              )}
             </div>
           </CardContent>
         )}
@@ -406,8 +466,8 @@ export default function ManagerUsersPage() {
           <h1 className="text-3xl font-bold">Residents</h1>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="gap-2" onClick={() => setImportOpen(true)}>
-              <Upload className="h-4 w-4" />
-              Import
+              <UserPlus className="h-4 w-4" />
+              Add User
             </Button>
             <Link href="/manager/qr-code">
               <Button variant="outline" size="sm" className="gap-2">
@@ -421,25 +481,83 @@ export default function ManagerUsersPage() {
         <Dialog open={importOpen} onOpenChange={setImportOpen}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>Import residents</DialogTitle>
+              <DialogTitle>Add residents</DialogTitle>
             </DialogHeader>
-            <p className="text-sm text-on-surface-variant">
-              Paste one resident per line: <code className="text-xs">name, email, unit, mobile, residencyType, fobNumber</code>
-              <br />
-              residencyType is one of TENANT, OWNER_OCCUPIER, NON_RESIDENT_OWNER. Mobile and fob number are optional.
-            </p>
-            <textarea
-              className="w-full h-40 border rounded-md p-2 text-sm font-mono"
-              placeholder={"Jane Smith, jane@example.com, 304, +61400000000, OWNER_OCCUPIER,\nJohn Doe, john@example.com, 105, , TENANT,"}
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-            />
-            {importError && <p className="text-sm text-red-600">{importError}</p>}
-            {importSuccess && <p className="text-sm text-green-600">{importSuccess}</p>}
-            <div className="flex gap-2">
-              <Button onClick={handleImport} disabled={importing || !importText.trim()}>
-                {importing ? "Importing…" : "Import residents"}
-              </Button>
+
+            <Tabs
+              defaultValue="single"
+              className="w-full"
+              onValueChange={() => { setImportError(""); setImportSuccess("") }}
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="single">Add User</TabsTrigger>
+                <TabsTrigger value="csv">Paste CSV</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="single" className="mt-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Name</Label>
+                    <Input value={singleForm.name} onChange={(e) => setSingleForm((f) => ({ ...f, name: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Unit Number</Label>
+                    <Input type="number" value={singleForm.apartmentNumber} onChange={(e) => setSingleForm((f) => ({ ...f, apartmentNumber: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label>Email</Label>
+                  <Input type="email" value={singleForm.email} onChange={(e) => setSingleForm((f) => ({ ...f, email: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label>Phone (optional)</Label>
+                  <Input type="tel" placeholder="+61..." value={singleForm.phoneNumber} onChange={(e) => setSingleForm((f) => ({ ...f, phoneNumber: e.target.value }))} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Residency type</Label>
+                    <Select value={singleForm.residencyType} onValueChange={(v) => setSingleForm((f) => ({ ...f, residencyType: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="TENANT">Tenant</SelectItem>
+                        <SelectItem value="OWNER_OCCUPIER">Owner-occupier</SelectItem>
+                        <SelectItem value="NON_RESIDENT_OWNER">Non-resident owner</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Fob number (optional)</Label>
+                    <Input value={singleForm.fobNumber} onChange={(e) => setSingleForm((f) => ({ ...f, fobNumber: e.target.value }))} />
+                  </div>
+                </div>
+                {importError && <p className="text-sm text-red-600">{importError}</p>}
+                {importSuccess && <p className="text-sm text-green-600">{importSuccess}</p>}
+                <Button onClick={handleAddSingle} disabled={importing} className="w-full">
+                  {importing ? "Adding…" : "Add User"}
+                </Button>
+              </TabsContent>
+
+              <TabsContent value="csv" className="mt-4 space-y-3">
+                <p className="text-sm text-on-surface-variant">
+                  Paste one resident per line: <code className="text-xs">name, email, unit, mobile, residencyType, fobNumber</code>
+                  <br />
+                  residencyType is one of TENANT, OWNER_OCCUPIER, NON_RESIDENT_OWNER. Mobile and fob number are optional.
+                </p>
+                <textarea
+                  className="w-full h-40 border rounded-md p-2 text-sm font-mono"
+                  placeholder={"Jane Smith, jane@example.com, 304, +61400000000, OWNER_OCCUPIER,\nJohn Doe, john@example.com, 105, , TENANT,"}
+                  value={importText}
+                  onChange={(e) => setImportText(e.target.value)}
+                />
+                {importError && <p className="text-sm text-red-600">{importError}</p>}
+                {importSuccess && <p className="text-sm text-green-600">{importSuccess}</p>}
+                <Button onClick={handleImport} disabled={importing || !importText.trim()} className="w-full">
+                  {importing ? "Importing…" : "Import residents"}
+                </Button>
+              </TabsContent>
+            </Tabs>
+
+            <div className="flex justify-end">
               <Button variant="ghost" onClick={() => setImportOpen(false)}>Close</Button>
             </div>
           </DialogContent>
@@ -456,8 +574,8 @@ export default function ManagerUsersPage() {
           />
         </div>
 
-        <Tabs defaultValue="pending" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="verified" className="w-full">
+          <TabsList data-highlight="residents-tabs" className="grid w-full grid-cols-3">
             <TabsTrigger value="pending">
               Pending ({filtered?.pending.length ?? 0})
             </TabsTrigger>
@@ -501,7 +619,7 @@ export default function ManagerUsersPage() {
                 </CardContent>
               </Card>
             ) : (
-              filtered?.deactivated.map((user) => renderUserCard(user, false))
+              filtered?.deactivated.map((user) => renderUserCard(user, true))
             )}
           </TabsContent>
         </Tabs>

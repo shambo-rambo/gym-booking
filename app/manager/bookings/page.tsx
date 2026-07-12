@@ -151,7 +151,7 @@ export default function ManagerBookingsPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-28">
         <h1 className="text-3xl font-bold mb-6">Booking Management</h1>
 
-        <Card className="mb-6">
+        <Card className="mb-6" data-highlight="bookings-filters">
           <CardHeader>
             <CardTitle>Filters</CardTitle>
           </CardHeader>

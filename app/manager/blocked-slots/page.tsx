@@ -205,7 +205,7 @@ export default function ManagerBlockedSlotsPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-20 pb-28">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Facility Management</h1>
-          <Button onClick={handleCreateClick}>
+          <Button onClick={handleCreateClick} data-highlight="blocked-slots-add-button">
             <Plus className="h-4 w-4 mr-2" />
             Block Slot
           </Button>

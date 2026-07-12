@@ -3,7 +3,7 @@ runConfig:
   cpu: 1
   memoryMiB: 512
   minInstances: 0
-  maxInstances: 10
+  maxInstances: 3
 
 env:
   - variable: DATABASE_URL
@@ -91,4 +91,9 @@ env:
     value: "BFPyuGzL3DuNE3FlzdrIZojcZEhZ_ikNGz6MxXGq0IXthLZMC_mWSDadtq8Z1Sb3n-Ym359WfKCyQXsCt4-fUSw"
     availability:
       - BUILD
+      - RUNTIME
+
+  - variable: ANTHROPIC_API_KEY
+    secret: ANTHROPIC_API_KEY
+    availability:
       - RUNTIME

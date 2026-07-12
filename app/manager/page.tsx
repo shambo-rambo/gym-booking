@@ -58,7 +58,7 @@ export default function ManagerPage() {
       <main className="max-w-lg mx-auto px-4 sm:px-6 pt-20 pb-28">
         <h1 className="text-2xl font-bold text-primary mt-6 mb-6">Dashboard</h1>
 
-        <div className="flex flex-col gap-4">
+        <div data-highlight="manager-dashboard-cards" className="flex flex-col gap-4">
           {CARDS.map(({ href, title, description, icon: Icon }) => (
             <Link key={href} href={href}>
               <Card className="hover:shadow-lg transition-shadow cursor-pointer active:scale-[0.98]" style={{ minHeight: "60px" }}>

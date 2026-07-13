@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useSession } from "next-auth/react"
 import { redirect } from "next/navigation"
 import Navbar from "@/components/Navbar"
@@ -15,13 +15,16 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
 import LoadingSpinner from "@/components/LoadingSpinner"
-import { ChevronLeft, Home, Wrench, AlertTriangle, Megaphone } from "lucide-react"
+import { ChevronLeft, Home, Wrench, AlertTriangle, Megaphone, Trash2 } from "lucide-react"
 import { UNITS_BY_FLOOR, ALL_FLOORS } from "@/lib/apartments"
 import { format, formatDistanceToNow } from "date-fns"
 
 const SMS_COST_ESTIMATE = 0.06 // AUD per message, matches lib/notifications.ts ClickSend fallback
 
 type Category = "AMENITY" | "MAINTENANCE" | "URGENT" | "GENERAL"
+// Sent history can also include MOVE notices — resident-authored, never composable
+// from this wizard (no CATEGORY_OPTIONS entry), so it's kept out of `Category`.
+type HistoryCategory = Category | "MOVE"
 type TargetMode = "ALL" | "TENANT" | "OWNERS" | "OWNER_OCCUPIER" | "FLOOR" | "APARTMENT"
 
 const CATEGORY_OPTIONS: { value: Category; label: string; icon: any; sms: boolean }[] = [
@@ -49,7 +52,7 @@ interface SentNotice {
   id: string
   title: string
   message: string
-  category: Category
+  category: HistoryCategory
   targetType: string
   targetValues: string[]
   sentSms: boolean
@@ -73,6 +76,10 @@ export default function MessagesPage() {
   const [preview, setPreview] = useState<Preview | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [sending, setSending] = useState(false)
+  // React state updates aren't synchronous, so a fast double-click/double-tap on
+  // "Yes, send now" can fire two overlapping requests before `disabled={sending}`
+  // reaches the DOM — this ref blocks re-entry immediately, before any await.
+  const sendingRef = useRef(false)
   const [sendError, setSendError] = useState("")
   const [sentConfirm, setSentConfirm] = useState<{ recipientCount: number } | null>(null)
   const [awaitingFinalConfirm, setAwaitingFinalConfirm] = useState(false)
@@ -82,10 +89,23 @@ export default function MessagesPage() {
 
   const [history, setHistory] = useState<SentNotice[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     fetchHistory()
   }, [])
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/manager/messages/${id}`, { method: "DELETE" })
+      if (res.ok) setHistory((prev) => prev.filter((n) => n.id !== id))
+    } finally {
+      setDeletingId(null)
+      setConfirmDeleteId(null)
+    }
+  }
 
   const fetchHistory = async () => {
     try {
@@ -150,6 +170,9 @@ export default function MessagesPage() {
   }
 
   const reuseNotice = (n: SentNotice) => {
+    // Move notices aren't composable from this wizard (no CATEGORY_OPTIONS entry) —
+    // the "Use as template" button is hidden for them, this is just a backstop.
+    if (n.category === "MOVE") return
     const { targetMode: tm, floors, apartments } = targetModeFromHistory(n)
     setCategory(n.category)
     setSmsOn(n.sentSms)
@@ -191,6 +214,8 @@ export default function MessagesPage() {
   }
 
   const handleSend = async () => {
+    if (sendingRef.current) return
+    sendingRef.current = true
     setSending(true)
     setSendError("")
     try {
@@ -218,6 +243,7 @@ export default function MessagesPage() {
     } catch {
       setSendError("Something went wrong sending this message.")
     } finally {
+      sendingRef.current = false
       setSending(false)
       setAwaitingFinalConfirm(false)
     }
@@ -587,7 +613,17 @@ export default function MessagesPage() {
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-bold text-primary">{n.title}</p>
-                        <Badge variant="outline" className="text-[10px] shrink-0">{n.category}</Badge>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="outline" className="text-[10px]">{n.category}</Badge>
+                          <button
+                            type="button"
+                            aria-label="Delete notice"
+                            onClick={() => setConfirmDeleteId(n.id)}
+                            className="text-on-surface-variant/50 hover:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                       <p className="text-sm text-on-surface-variant line-clamp-2 mt-1">{n.message}</p>
                       <p className="text-xs text-on-surface-variant/70 mt-2">
@@ -596,15 +632,42 @@ export default function MessagesPage() {
                       <p className="text-xs font-semibold text-secondary mt-0.5">
                         {describeAudience(n)} · {n.recipientCount} recipient{n.recipientCount === 1 ? "" : "s"}
                       </p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        style={{ minHeight: "44px" }}
-                        className="w-full mt-3 text-sm font-semibold"
-                        onClick={() => reuseNotice(n)}
-                      >
-                        Use as template
-                      </Button>
+                      {confirmDeleteId === n.id ? (
+                        <div className="flex items-center gap-2 mt-3">
+                          <p className="text-xs text-destructive flex-1">Delete this notice for everyone?</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            style={{ minHeight: "36px" }}
+                            className="text-xs px-3"
+                            onClick={() => setConfirmDeleteId(null)}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            style={{ minHeight: "36px" }}
+                            className="text-xs px-3"
+                            disabled={deletingId === n.id}
+                            onClick={() => handleDelete(n.id)}
+                          >
+                            {deletingId === n.id ? "Deleting…" : "Delete"}
+                          </Button>
+                        </div>
+                      ) : (
+                        n.category !== "MOVE" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            style={{ minHeight: "44px" }}
+                            className="w-full mt-3 text-sm font-semibold"
+                            onClick={() => reuseNotice(n)}
+                          >
+                            Use as template
+                          </Button>
+                        )
+                      )}
                     </CardContent>
                   </Card>
                 ))}

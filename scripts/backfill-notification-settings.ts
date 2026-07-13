@@ -2,7 +2,7 @@ import { PrismaClient, NotificationCategory, NotificationPreference } from '@pri
 
 const prisma = new PrismaClient()
 
-const CATEGORIES: NotificationCategory[] = ['BOOKINGS', 'AMENITY', 'MAINTENANCE', 'URGENT', 'GENERAL']
+const CATEGORIES: NotificationCategory[] = ['BOOKINGS', 'AMENITY', 'MAINTENANCE', 'URGENT', 'GENERAL', 'MOVE']
 
 function defaultsFor(category: NotificationCategory, pref: NotificationPreference) {
   if (category === 'URGENT') {

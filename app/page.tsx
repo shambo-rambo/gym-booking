@@ -3,17 +3,20 @@
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import Navbar from "@/components/Navbar"
 import { Badge } from "@/components/ui/badge"
-import { format, formatDistanceToNow } from "date-fns"
-import { AlertTriangle, Bell } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { format, formatDistanceToNow, differenceInCalendarDays } from "date-fns"
+import { AlertTriangle, Bell, Truck } from "lucide-react"
 
 interface Notice {
   id: string
   title: string
   message: string
-  category: "AMENITY" | "MAINTENANCE" | "URGENT" | "GENERAL"
+  category: "AMENITY" | "MAINTENANCE" | "URGENT" | "GENERAL" | "MOVE"
   createdAt: string
+  eventAt: string | null
   createdByName: string
   readAt: string | null
 }
@@ -23,7 +26,12 @@ const CATEGORY_LABELS: Record<Notice["category"], string> = {
   MAINTENANCE: "Maintenance",
   URGENT: "Urgent",
   GENERAL: "General",
+  MOVE: "Move",
 }
+
+// A notice's "effective" date: the date it's about (eventAt, e.g. a Move In/Out)
+// if it has one, otherwise the date it was posted.
+const effectiveDate = (notice: Notice) => new Date(notice.eventAt ?? notice.createdAt)
 
 export default function HomePage() {
   const { data: session, status } = useSession()
@@ -69,11 +77,32 @@ export default function HomePage() {
   }
 
   const unreadCount = notices.filter((n) => !n.readAt).length
-  const urgent = notices.filter((n) => n.category === "URGENT")
-  const rest = notices.filter((n) => n.category !== "URGENT")
+
+  // Urgent notices get distinct card styling (below) but otherwise bucket by date
+  // like everything else — they're not pinned above Past forever. Their Today→Past
+  // cutoff is 48 hours since posting rather than a calendar-day boundary, matching
+  // how long they stay in the feed at all before auto-expiring (lib/notice-send.ts).
+  const URGENT_WINDOW_MS = 48 * 60 * 60 * 1000
+  const bucketFor = (n: Notice): "today" | "upcoming" | "past" => {
+    const diffDays = differenceInCalendarDays(effectiveDate(n), new Date())
+    if (diffDays > 0) return "upcoming"
+    if (n.category === "URGENT") {
+      return Date.now() - effectiveDate(n).getTime() < URGENT_WINDOW_MS ? "today" : "past"
+    }
+    return diffDays === 0 ? "today" : "past"
+  }
+
+  const today = notices.filter((n) => bucketFor(n) === "today")
+  const upcoming = notices
+    .filter((n) => bucketFor(n) === "upcoming")
+    .sort((a, b) => effectiveDate(a).getTime() - effectiveDate(b).getTime())
+  const past = notices
+    .filter((n) => bucketFor(n) === "past")
+    .sort((a, b) => effectiveDate(b).getTime() - effectiveDate(a).getTime())
 
   const NoticeCard = ({ notice }: { notice: Notice }) => {
     const isUrgent = notice.category === "URGENT"
+    const isMove = notice.category === "MOVE"
     const isUnread = !notice.readAt
     const isOpen = openId === notice.id
     return (
@@ -86,6 +115,7 @@ export default function HomePage() {
         <div className="flex items-start justify-between gap-2 mb-1">
           <div className="flex items-center gap-2">
             {isUrgent && <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />}
+            {isMove && <Truck className="w-4 h-4 text-secondary shrink-0" />}
             <p className={`font-bold ${isUrgent ? "text-red-700" : "text-primary"}`}>{notice.title}</p>
             {isUnread && <span className="w-2 h-2 rounded-full bg-secondary shrink-0" />}
           </div>
@@ -94,18 +124,28 @@ export default function HomePage() {
           </Badge>
         </div>
         <p className="text-xs text-on-surface-variant mb-2">
-          {formatDistanceToNow(new Date(notice.createdAt), { addSuffix: true })} · {notice.createdByName}
+          {isMove && notice.eventAt
+            ? format(new Date(notice.eventAt), "EEE d MMM · h:mma")
+            : `${formatDistanceToNow(new Date(notice.createdAt), { addSuffix: true })} · ${notice.createdByName}`}
         </p>
         <p className={`text-sm text-on-surface-variant ${isOpen ? "" : "line-clamp-2"}`}>{notice.message}</p>
       </button>
     )
   }
 
+  const NoticeSection = ({ label, items }: { label: string; items: Notice[] }) =>
+    items.length === 0 ? null : (
+      <div className="space-y-3">
+        <h2 className="text-xs font-bold uppercase tracking-wide text-on-surface-variant/70 mt-2">{label}</h2>
+        {items.map((n) => <NoticeCard key={n.id} notice={n} />)}
+      </div>
+    )
+
   return (
     <div className="min-h-screen bg-surface">
       <Navbar />
       <main className="max-w-2xl mx-auto px-4 sm:px-6 pt-20 pb-28">
-        <div className="flex items-center gap-2 mt-6 mb-6">
+        <div className="flex items-center gap-2 mt-6 mb-2">
           <Bell className="w-5 h-5 text-secondary" />
           <h1 className="text-lg font-bold text-primary">Notices</h1>
           {unreadCount > 0 && (
@@ -113,15 +153,22 @@ export default function HomePage() {
           )}
         </div>
 
+        <Button asChild variant="outline" size="sm" className="mb-6 font-semibold">
+          <Link href="/notices/new-move">
+            <Truck className="w-4 h-4" /> Post Moving In / Out
+          </Link>
+        </Button>
+
         {notices.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-outline-variant/20 p-8 text-center">
             <p className="text-on-surface-variant font-medium mb-1">No notices yet</p>
             <p className="text-sm text-on-surface-variant/60">Building announcements will show up here.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {urgent.map((n) => <NoticeCard key={n.id} notice={n} />)}
-            {rest.map((n) => <NoticeCard key={n.id} notice={n} />)}
+          <div className="space-y-6">
+            <NoticeSection label="Today" items={today} />
+            <NoticeSection label="Upcoming" items={upcoming} />
+            <NoticeSection label="Past" items={past} />
           </div>
         )}
       </main>

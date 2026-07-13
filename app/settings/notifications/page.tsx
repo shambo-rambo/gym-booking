@@ -9,9 +9,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import LoadingSpinner from "@/components/LoadingSpinner"
-import { ChevronLeft, Home, Wrench, AlertTriangle, Megaphone, CalendarCheck, BellRing } from "lucide-react"
+import { ChevronLeft, Home, Wrench, AlertTriangle, Megaphone, CalendarCheck, BellRing, Truck } from "lucide-react"
 
-type Category = "BOOKINGS" | "AMENITY" | "MAINTENANCE" | "URGENT" | "GENERAL"
+type Category = "BOOKINGS" | "AMENITY" | "MAINTENANCE" | "URGENT" | "GENERAL" | "MOVE"
 
 interface CategorySetting {
   category: Category
@@ -26,6 +26,7 @@ const CATEGORY_ROWS: { value: Category; label: string; description: string; icon
   { value: "MAINTENANCE", label: "Maintenance", description: "Scheduled works and outages", icon: Wrench },
   { value: "URGENT", label: "Urgent", description: "Serious or safety-related communications only", icon: AlertTriangle, locked: true },
   { value: "GENERAL", label: "General", description: "Everything else from building management", icon: Megaphone },
+  { value: "MOVE", label: "Move In/Out", description: "Other residents logging a move in or out", icon: Truck },
 ]
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {

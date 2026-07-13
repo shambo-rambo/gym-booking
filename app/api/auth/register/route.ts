@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
         { userId: user.id, category: "MAINTENANCE", email: true, sms: false, push: true },
         { userId: user.id, category: "URGENT", email: true, sms: true, push: true },
         { userId: user.id, category: "GENERAL", email: true, sms: false, push: true },
+        { userId: user.id, category: "MOVE", email: true, sms: false, push: true },
       ],
     })
 

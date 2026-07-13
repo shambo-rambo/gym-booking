@@ -29,13 +29,19 @@ export async function GET(request: NextRequest) {
       message: r.notice.message,
       category: r.notice.category,
       createdAt: r.notice.createdAt,
+      eventAt: r.notice.eventAt,
       createdByName: r.notice.creator.name,
       readAt: r.readAt,
     }))
     .sort((a, b) => {
-      if (a.category === "URGENT" && b.category !== "URGENT") return -1
-      if (b.category === "URGENT" && a.category !== "URGENT") return 1
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      // Ascending by effective date (eventAt if the notice is about a specific
+      // date, otherwise when it was posted). The client groups these into
+      // Today/Upcoming/Past sections (Urgent included — it's no longer pinned
+      // above them) and reverses order within Past — a single flat sort can't
+      // express "ascending here, descending there" on its own.
+      const aDate = new Date(a.eventAt ?? a.createdAt).getTime()
+      const bDate = new Date(b.eventAt ?? b.createdAt).getTime()
+      return aDate - bDate
     })
 
   return NextResponse.json({ notices })

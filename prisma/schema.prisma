@@ -157,6 +157,7 @@ model Announcement {
   createdBy    String
   creator      User     @relation(fields: [createdBy], references: [id])
   createdAt    DateTime @default(now())
+  eventAt      DateTime?
   expiresAt    DateTime?
 
   category     NoticeCategory   @default(GENERAL)
@@ -189,6 +190,7 @@ enum NoticeCategory {
   MAINTENANCE
   URGENT
   GENERAL
+  MOVE
 }
 
 enum NoticeTargetType {
@@ -247,6 +249,7 @@ enum NotificationCategory {
   MAINTENANCE
   URGENT
   GENERAL
+  MOVE
 }
 
 model NotificationSetting {

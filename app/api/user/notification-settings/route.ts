@@ -6,7 +6,7 @@ import { z } from "zod"
 
 export const dynamic = 'force-dynamic'
 
-const CATEGORIES = ["BOOKINGS", "AMENITY", "MAINTENANCE", "URGENT", "GENERAL"] as const
+const CATEGORIES = ["BOOKINGS", "AMENITY", "MAINTENANCE", "URGENT", "GENERAL", "MOVE"] as const
 
 export async function GET() {
   const session = await auth()

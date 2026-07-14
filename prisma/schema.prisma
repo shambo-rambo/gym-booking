@@ -277,3 +277,31 @@ model PushSubscription {
 
   @@index([userId])
 }
+
+enum AmenityExceptionType {
+  UNBOOKED_ACCESS
+  NO_SHOW
+}
+
+// Weekly reconciliation between Inception fob-access logs and app bookings.
+// See lib/amenity-audit.ts.
+model AmenityAuditException {
+  id                  String               @id @default(cuid())
+  exceptionType       AmenityExceptionType
+  unitNumber          Int
+  rawSystemIdentifier String?              // raw Inception "Who" string; null for NO_SHOW
+  location            String               // e.g. "Gym/Sauna Amenity Door"
+  windowLabel         String               // human-readable, e.g. "Tuesday, July 14, 2:14 PM"
+  eventAt             DateTime?            // swipe timestamp, for UNBOOKED_ACCESS
+  bookingId           String?              // originating Booking.id, for NO_SHOW
+  windowStart         DateTime?            // booking start, for NO_SHOW
+  windowEnd           DateTime?            // booking end, for NO_SHOW
+  auditWeekStart      DateTime
+  auditWeekEnd        DateTime
+  dedupeKey           String               @unique
+  createdAt           DateTime             @default(now())
+
+  @@index([auditWeekStart])
+  @@index([exceptionType])
+  @@index([unitNumber])
+}

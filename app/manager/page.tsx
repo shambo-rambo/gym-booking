@@ -6,7 +6,7 @@ import Navbar from "@/components/Navbar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import LoadingSpinner from "@/components/LoadingSpinner"
-import { MessageSquare, Users, CalendarDays, Ban } from "lucide-react"
+import { MessageSquare, Users, CalendarDays, Ban, ShieldAlert } from "lucide-react"
 
 const CARDS = [
   {
@@ -32,6 +32,12 @@ const CARDS = [
     title: "Block a facility",
     description: "Close a slot for maintenance or cleaning",
     icon: Ban,
+  },
+  {
+    href: "/manager/amenity-audit",
+    title: "Amenity audit",
+    description: "Un-booked access and no-show exceptions",
+    icon: ShieldAlert,
   },
 ]
 

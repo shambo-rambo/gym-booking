@@ -43,3 +43,21 @@ export function isSameDay(date1: Date, date2: Date): boolean {
     date1.getDate() === date2.getDate()
   )
 }
+
+/**
+ * Combine a booking's date (@db.Date, stored at UTC midnight) with its "HH:MM"
+ * startTime and duration (minutes) into absolute start/end Date objects.
+ * Mirrors the inline logic in app/api/cron/booking-reminders/route.ts.
+ *
+ * @param date - Booking date
+ * @param startTime - "HH:MM" wall-clock start time
+ * @param durationMinutes - Booking duration in minutes
+ * @returns Absolute start and end Date objects
+ */
+export function getBookingTimeRange(date: Date, startTime: string, durationMinutes: number): { start: Date; end: Date } {
+  const [hours, minutes] = startTime.split(':').map(Number)
+  const start = new Date(date)
+  start.setHours(hours, minutes, 0, 0)
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000)
+  return { start, end }
+}

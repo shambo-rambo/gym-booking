@@ -46,7 +46,7 @@ gcloud scheduler jobs create http booking-reminders \
        --time-zone="$TIMEZONE" \
        --uri="$BASE_URL/api/cron/booking-reminders" \
        --http-method=GET \
-       --headers="Authorization=Bearer $CRON_SECRET" \
+       --update-headers="Authorization=Bearer $CRON_SECRET" \
        --attempt-deadline=60s
 
 echo "✓ booking-reminders (hourly)"
@@ -69,7 +69,7 @@ gcloud scheduler jobs create http expire-queue-claims \
        --time-zone="$TIMEZONE" \
        --uri="$BASE_URL/api/cron/expire-queue-claims" \
        --http-method=GET \
-       --headers="Authorization=Bearer $CRON_SECRET" \
+       --update-headers="Authorization=Bearer $CRON_SECRET" \
        --attempt-deadline=30s
 
 echo "✓ expire-queue-claims (every 5 minutes)"
@@ -92,10 +92,33 @@ gcloud scheduler jobs create http release-waitlisted-slots \
        --time-zone="$TIMEZONE" \
        --uri="$BASE_URL/api/cron/release-waitlisted-slots" \
        --http-method=GET \
-       --headers="Authorization=Bearer $CRON_SECRET" \
+       --update-headers="Authorization=Bearer $CRON_SECRET" \
        --attempt-deadline=60s
 
 echo "✓ release-waitlisted-slots (hourly)"
+
+# Job 4: Amenity access audit (weekly, Monday 3am)
+gcloud scheduler jobs create http amenity-audit \
+  --project="$PROJECT_ID" \
+  --location="$REGION" \
+  --schedule="0 3 * * 1" \
+  --time-zone="$TIMEZONE" \
+  --uri="$BASE_URL/api/cron/amenity-audit" \
+  --http-method=GET \
+  --headers="Authorization=Bearer $CRON_SECRET" \
+  --attempt-deadline=120s \
+  --description="Reconciles Inception fob access logs against bookings for the past week" \
+  || gcloud scheduler jobs update http amenity-audit \
+       --project="$PROJECT_ID" \
+       --location="$REGION" \
+       --schedule="0 3 * * 1" \
+       --time-zone="$TIMEZONE" \
+       --uri="$BASE_URL/api/cron/amenity-audit" \
+       --http-method=GET \
+       --update-headers="Authorization=Bearer $CRON_SECRET" \
+       --attempt-deadline=120s
+
+echo "✓ amenity-audit (weekly, Monday 3am)"
 echo ""
 echo "All Cloud Scheduler jobs created. Verify in the console:"
 echo "https://console.cloud.google.com/cloudscheduler?project=$PROJECT_ID"

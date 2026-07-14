@@ -97,3 +97,23 @@ env:
     secret: ANTHROPIC_API_KEY
     availability:
       - RUNTIME
+
+  - variable: INCEPTION_BASE_URL
+    value: "https://www.skytunnel.com.au/inception/IN96854389"
+    availability:
+      - RUNTIME
+
+  - variable: INCEPTION_API_USERNAME
+    secret: INCEPTION_API_USERNAME
+    availability:
+      - RUNTIME
+
+  - variable: INCEPTION_API_PASSWORD
+    secret: INCEPTION_API_PASSWORD
+    availability:
+      - RUNTIME
+
+  - variable: INCEPTION_AMENITY_WHERE_ID
+    value: "4139f35e-a227-4b92-8b4d-fc45c14db4c2"
+    availability:
+      - RUNTIME

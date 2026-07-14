@@ -105,6 +105,8 @@ Secrets currently wired in `apphosting.yaml`:
 | `RESEND_API_KEY` | Email notifications |
 | `BUILDING_CODE` | Resident self-verification code |
 | `CRON_SECRET` | Cron job authentication |
+| `INCEPTION_API_USERNAME` | Inner Range Inception REST API user (amenity audit) |
+| `INCEPTION_API_PASSWORD` | Inner Range Inception REST API password (amenity audit) |
 
 ### 3. Deploy
 
@@ -122,13 +124,14 @@ Then push to the connected Git branch.
 
 Firebase App Hosting does not have built-in cron support. Cron jobs run via **Google Cloud Scheduler**, which calls the app's cron API routes on a schedule.
 
-The three jobs and their schedules:
+The four jobs and their schedules:
 
 | Job | Route | Schedule | Purpose |
 |-----|-------|----------|---------|
 | `booking-reminders` | `/api/cron/booking-reminders` | Hourly | Sends reminder notifications 2 hours before upcoming bookings |
 | `expire-queue-claims` | `/api/cron/expire-queue-claims` | Every 5 min | Expires unclaimed queue notifications, notifies next person |
 | `release-waitlisted-slots` | `/api/cron/release-waitlisted-slots` | Hourly | Auto-releases slots 3 hours before session if queue exists |
+| `amenity-audit` | `/api/cron/amenity-audit` | Weekly, Monday 3am | Reconciles Inception fob access logs against bookings for the past week |
 
 All routes require `Authorization: Bearer {CRON_SECRET}` — Cloud Scheduler sends this header.
 
@@ -142,7 +145,7 @@ export CRON_SECRET="your-cron-secret-value"
 bash scripts/setup-cloud-scheduler.sh
 ```
 
-The script creates (or updates) all three Cloud Scheduler jobs. Verify them at:
+The script creates (or updates) all four Cloud Scheduler jobs. Verify them at:
 `https://console.cloud.google.com/cloudscheduler?project=watertower-gym`
 
 ---

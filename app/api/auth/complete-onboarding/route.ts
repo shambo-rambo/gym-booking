@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
         apartmentNumber: validated.apartmentNumber,
         phoneNumber: validated.phoneNumber ?? null,
         notificationPreference: "EMAIL_ONLY",
-        status: "VERIFIED",
+        status: "PENDING",
         role: "RESIDENT",
       },
     })
@@ -102,15 +102,15 @@ export async function POST(request: NextRequest) {
         .send({
           from: process.env.RESEND_FROM_EMAIL || "The Watertower <onboarding@resend.dev>",
           to: managers.map((m) => m.email),
-          subject: "New resident registered",
+          subject: "New resident registration pending approval",
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #4F46E5;">New resident registered</h2>
+              <h2 style="color: #4F46E5;">New registration pending approval</h2>
               <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <p style="margin: 5px 0;"><strong>Name:</strong> ${safeName}</p>
                 <p style="margin: 5px 0;"><strong>Email:</strong> ${safeEmail}</p>
                 <p style="margin: 5px 0;"><strong>Unit:</strong> ${newUser.apartmentNumber}</p>
-                <p style="margin: 5px 0;"><strong>Status:</strong> Auto-verified (Google sign-in)</p>
+                <p style="margin: 5px 0;"><strong>Status:</strong> Pending approval (Google sign-in)</p>
               </div>
               <a href="${appUrl}/manager/users" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">View in Manager Dashboard</a>
             </div>

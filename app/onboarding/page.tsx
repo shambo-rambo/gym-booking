@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useSession } from "next-auth/react"
+import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { UNITS_BY_FLOOR } from "@/lib/apartments"
 
 export default function OnboardingPage() {
-  const { data: session, update } = useSession()
+  const { data: session } = useSession()
   const router = useRouter()
 
   const [apartmentNumber, setApartmentNumber] = useState("")
@@ -56,9 +56,10 @@ export default function OnboardingPage() {
         return
       }
 
-      // Trigger JWT refresh so needsOnboarding clears
-      await update({ recheck: true })
-      router.replace("/")
+      // Account is created but PENDING until a manager verifies it — sign out
+      // rather than letting the still-active session into the app.
+      await signOut({ redirect: false })
+      router.replace("/login?registered=pending")
     } catch {
       setError("An error occurred. Please try again.")
       setLoading(false)

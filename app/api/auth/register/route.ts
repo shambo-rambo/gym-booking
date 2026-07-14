@@ -61,7 +61,16 @@ export async function POST(request: NextRequest) {
       buildingCode &&
       validatedData.buildingCode?.trim().toLowerCase() === buildingCode.trim().toLowerCase()
 
-    const status = codeCorrect ? "VERIFIED" : "PENDING"
+    if (!codeCorrect) {
+      return NextResponse.json(
+        { success: false, message: "Invalid building code. Contact your building manager." },
+        { status: 400 }
+      )
+    }
+
+    // Correct code proves they got it from someone in the building, but a
+    // manager still has to confirm identity before the account is usable.
+    const status = "PENDING"
 
     const hashedPassword = await bcrypt.hash(validatedData.password, 10)
 
@@ -97,22 +106,19 @@ export async function POST(request: NextRequest) {
 
     if (resend && managers.length > 0) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
-      const isPending = status === "PENDING"
       await resend.emails
         .send({
           from: process.env.RESEND_FROM_EMAIL || "The Watertower <onboarding@resend.dev>",
           to: managers.map((m) => m.email),
-          subject: isPending
-            ? "New resident registration pending approval"
-            : "New resident registered",
+          subject: "New resident registration pending approval",
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #4F46E5;">${isPending ? "New registration pending approval" : "New resident registered"}</h2>
+              <h2 style="color: #4F46E5;">New registration pending approval</h2>
               <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
                 <p style="margin: 5px 0;"><strong>Name:</strong> ${escapeHtml(user.name)}</p>
                 <p style="margin: 5px 0;"><strong>Email:</strong> ${escapeHtml(user.email)}</p>
                 <p style="margin: 5px 0;"><strong>Unit:</strong> ${user.apartmentNumber}</p>
-                <p style="margin: 5px 0;"><strong>Status:</strong> ${isPending ? "Pending approval" : "Auto-verified"}</p>
+                <p style="margin: 5px 0;"><strong>Status:</strong> Pending approval</p>
               </div>
               <a href="${appUrl}/manager/users" style="display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">View in Manager Dashboard</a>
             </div>
@@ -123,11 +129,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      verified: status === "VERIFIED",
-      message:
-        status === "VERIFIED"
-          ? "You're all set! You can log in now."
-          : "Registration received. A manager will approve your account shortly.",
+      verified: false,
+      message: "Registration received. A manager will approve your account shortly.",
     })
   } catch (error) {
     if (error instanceof z.ZodError) {

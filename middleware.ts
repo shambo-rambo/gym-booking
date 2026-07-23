@@ -3,6 +3,12 @@ import { NextResponse } from "next/server"
 
 const PUBLIC_PATHS = ["/login", "/register", "/onboarding"]
 
+// API routes a user must still be able to call while mid-2FA-setup or mid-2FA-verification,
+// since these are exactly how they satisfy those requirements. Everything under /api/auth/
+// (NextAuth's own endpoints plus our verify-login/check-trusted-device routes) is implicitly
+// allowed too — see the isAuthApi check below.
+const TWO_FACTOR_SETUP_API_ALLOWLIST = ["/api/user/2fa/setup", "/api/user/2fa/enable"]
+
 export default auth((req) => {
   const session = req.auth
   const { pathname } = req.nextUrl
@@ -39,27 +45,34 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/change-password", req.url))
   }
 
-  // Managers must have 2FA enabled — no grace period.
-  if (
-    session?.user &&
-    (session.user as any).twoFactorSetupRequired === true &&
-    pathname !== "/setup-2fa" &&
-    !pathname.startsWith("/api/") &&
-    !pathname.startsWith("/_next")
-  ) {
-    return NextResponse.redirect(new URL("/setup-2fa", req.url))
+  const isApi = pathname.startsWith("/api/")
+  const isAuthApi = pathname.startsWith("/api/auth/")
+
+  // Managers must have 2FA enabled — no grace period. Enforced for API calls too (not just
+  // page navigation) so a leaked password alone can't be used to hit privileged endpoints
+  // directly, bypassing the /setup-2fa redirect.
+  if (session?.user && (session.user as any).twoFactorSetupRequired === true) {
+    if (isApi && !isAuthApi && !TWO_FACTOR_SETUP_API_ALLOWLIST.includes(pathname)) {
+      return NextResponse.json({ error: "Two-factor authentication setup required" }, { status: 403 })
+    }
+    if (!isApi && pathname !== "/setup-2fa" && !pathname.startsWith("/_next")) {
+      return NextResponse.redirect(new URL("/setup-2fa", req.url))
+    }
   }
 
-  // Anyone with 2FA enabled must verify it once per session before proceeding.
+  // Anyone with 2FA enabled must verify it once per session before proceeding — again,
+  // enforced for API calls, not just page navigation.
   if (
     session?.user &&
     (session.user as any).twoFactorEnabled === true &&
-    (session.user as any).twoFactorVerified === false &&
-    pathname !== "/verify-2fa" &&
-    !pathname.startsWith("/api/") &&
-    !pathname.startsWith("/_next")
+    (session.user as any).twoFactorVerified === false
   ) {
-    return NextResponse.redirect(new URL("/verify-2fa", req.url))
+    if (isApi && !isAuthApi) {
+      return NextResponse.json({ error: "Two-factor verification required" }, { status: 403 })
+    }
+    if (!isApi && pathname !== "/verify-2fa" && !pathname.startsWith("/_next")) {
+      return NextResponse.redirect(new URL("/verify-2fa", req.url))
+    }
   }
 
   return NextResponse.next()

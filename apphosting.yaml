@@ -42,6 +42,11 @@ env:
     availability:
       - RUNTIME
 
+  - variable: TWO_FACTOR_ENCRYPTION_KEY
+    secret: TWO_FACTOR_ENCRYPTION_KEY
+    availability:
+      - RUNTIME
+
   - variable: NEXT_PUBLIC_APP_URL
     value: "https://gym-booking--watertower-gym.asia-southeast1.hosted.app"
     availability:

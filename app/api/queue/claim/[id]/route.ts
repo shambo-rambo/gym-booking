@@ -8,6 +8,7 @@ import {
   checkConsecutiveDays,
   isSlotAvailable,
   parseSlotDateTime,
+  LAST_MINUTE_BYPASS_MINUTES,
 } from "@/lib/booking-rules"
 import { BookingType, FacilityType, EquipmentType } from "@prisma/client"
 import { sendNotification } from "@/lib/notifications"
@@ -53,7 +54,7 @@ export async function POST(
     }
 
     const minutesUntilSlot = (parseSlotDateTime(queueEntry.date, queueEntry.startTime).getTime() - Date.now()) / (1000 * 60)
-    const isLastMinute = minutesUntilSlot <= 180
+    const isLastMinute = minutesUntilSlot <= LAST_MINUTE_BYPASS_MINUTES
 
     // Last-minute bypass: skip notification requirement and anti-hoarding checks
     if (!isLastMinute) {
@@ -86,16 +87,18 @@ export async function POST(
       )
     }
 
-    // Anti-hoarding checks skipped for last-minute claims
+    // The daily 1-hour limit is never bypassed, even for last-minute claims — otherwise a
+    // resident could stack extra time onto an already-maxed-out day as the clock ticks down.
+    const dailyCheck = await checkDailyLimit(userId, queueEntry.facilityType, queueEntry.date, queueEntry.startTime, queueEntry.duration)
+    if (!dailyCheck.allowed) {
+      return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
+    }
+
+    // Session-count and consecutive-day checks are skipped for last-minute claims
     if (!isLastMinute) {
       const sessionCheck = await checkSessionLimit(userId, queueEntry.facilityType)
       if (!sessionCheck.allowed) {
         return NextResponse.json({ error: sessionCheck.reason }, { status: 400 })
-      }
-
-      const dailyCheck = await checkDailyLimit(userId, queueEntry.facilityType, queueEntry.date, queueEntry.startTime, queueEntry.duration)
-      if (!dailyCheck.allowed) {
-        return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
       }
 
       const consecutiveCheck = await checkConsecutiveDays(userId, queueEntry.facilityType, queueEntry.date, queueEntry.startTime)

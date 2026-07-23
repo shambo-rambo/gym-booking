@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import Navbar from "@/components/Navbar"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { format, formatDistanceToNow, differenceInCalendarDays } from "date-fns"
 import { AlertTriangle, Bell, Truck } from "lucide-react"
 
@@ -152,12 +150,6 @@ export default function HomePage() {
             <Badge className="ml-auto bg-secondary text-on-secondary">{unreadCount} new</Badge>
           )}
         </div>
-
-        <Button asChild variant="outline" size="sm" className="mb-6 font-semibold">
-          <Link href="/notices/new-move">
-            <Truck className="w-4 h-4" /> Post Moving In / Out
-          </Link>
-        </Button>
 
         {notices.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm border border-outline-variant/20 p-8 text-center">

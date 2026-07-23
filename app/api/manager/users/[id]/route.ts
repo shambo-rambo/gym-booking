@@ -17,7 +17,6 @@ const editUserSchema = z.object({
   apartmentNumber: z.number().int().min(1).max(9999),
   phoneNumber: z.string().nullable().optional(),
   residencyType: z.enum(["TENANT", "OWNER_OCCUPIER", "NON_RESIDENT_OWNER"]).nullable().optional(),
-  fobNumber: z.string().nullable().optional(),
   notificationPreference: z.enum(["EMAIL_ONLY", "SMS_ONLY", "BOTH"]).optional(),
   newPassword: z.string().min(8).optional(),
 })
@@ -131,7 +130,7 @@ export async function PUT(
       !data.phoneNumber
     ) {
       return NextResponse.json(
-        { error: "A phone number is required to enable text notifications" },
+        { error: "A phone number is required to enable SMS notifications" },
         { status: 400 }
       )
     }
@@ -148,7 +147,6 @@ export async function PUT(
         apartmentNumber: data.apartmentNumber,
         phoneNumber: data.phoneNumber ?? null,
         residencyType: data.residencyType ?? null,
-        fobNumber: data.fobNumber ?? null,
         notificationPreference: data.notificationPreference,
         ...passwordUpdate,
       }

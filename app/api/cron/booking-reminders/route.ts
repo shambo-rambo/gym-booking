@@ -49,6 +49,25 @@ export async function GET(request: NextRequest) {
       const hoursUntil = timeDiff / (1000 * 60 * 60)
 
       if (hoursUntil >= 1.92 && hoursUntil <= 2.08) { // 2 hours ± 5 minutes
+        // Residents who've opted in (off by default) get an interactive "still coming?"
+        // push/email with Yes/No actions instead of the plain reminder below.
+        if (booking.user.confirmBookingChecks) {
+          await sendNotification(
+            booking.user,
+            'BOOKING_CONFIRM_CHECK',
+            {
+              facilityType: booking.facilityType.toString(),
+              date: format(booking.date, 'EEEE, MMMM d, yyyy'),
+              startTime: booking.startTime,
+              bookingId: booking.id,
+            },
+            { sms: false }
+          )
+
+          sentCount++
+          continue
+        }
+
         // Check if anyone is queued for this slot
         const queueCount = await prisma.queueEntry.count({
           where: {

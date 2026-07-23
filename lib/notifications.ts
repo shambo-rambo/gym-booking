@@ -2,6 +2,7 @@ import { Resend } from 'resend'
 import { prisma } from './prisma'
 import { NotificationType, NotificationChannel, NotificationCategory, User } from '@prisma/client'
 import { sendPush } from './push'
+import { QUEUE_CLAIM_WINDOW_MINUTES } from './booking-constants'
 
 // Initialize services (will only work if env vars are set)
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
@@ -23,6 +24,12 @@ interface NotificationData {
   reason?: string
   title?: string
   body?: string
+  // BOOKING_CONFIRM_CHECK only — lets the push payload carry the booking id so the
+  // service worker can cancel it directly from a notification action button.
+  bookingId?: string
+  // BOOKING_CONFIRMATION only — a pre-generated .ics calendar file attached to the email.
+  icsContent?: string
+  icsFilename?: string
   // Only set (and only relevant) for BUILDING_MESSAGE — carries the Announcement's
   // category so per-category NotificationSetting rows can be looked up.
   category?: NotificationCategory
@@ -43,6 +50,7 @@ function resolveCategory(type: NotificationType, data: NotificationData): Notifi
   switch (type) {
     case 'BOOKING_CONFIRMATION':
     case 'BOOKING_REMINDER':
+    case 'BOOKING_CONFIRM_CHECK':
     case 'BOOKING_CANCELLED_BY_ADMIN':
     case 'QUEUE_SLOT_AVAILABLE':
     case 'QUEUE_POSITION_UPDATE':
@@ -109,7 +117,15 @@ export async function sendNotification(
   }
 
   if (emailAllowed && emailGate) {
-    await sendEmail(user.email, content.subject, content.emailBody, user.id, type)
+    // Resend's API expects attachment content as base64.
+    const attachments = data.icsContent
+      ? [{
+          filename: data.icsFilename || 'booking.ics',
+          content: Buffer.from(data.icsContent).toString('base64'),
+          contentType: 'text/calendar',
+        }]
+      : undefined
+    await sendEmail(user.email, content.subject, content.emailBody, user.id, type, attachments)
   }
 
   if (smsAllowed && user.phoneNumber && smsGate) {
@@ -129,7 +145,8 @@ async function sendEmail(
   subject: string,
   html: string,
   userId: string,
-  type: NotificationType
+  type: NotificationType,
+  attachments?: { filename: string; content: string; contentType?: string }[]
 ) {
   if (!resend) {
     console.log('[Email - Not Configured] Would send to:', to)
@@ -145,7 +162,8 @@ async function sendEmail(
       from: process.env.RESEND_FROM_EMAIL || 'The Watertower <onboarding@resend.dev>',
       to,
       subject,
-      html
+      html,
+      attachments
     })
 
     await logNotification(userId, type, NotificationChannel.EMAIL, html, true)
@@ -263,6 +281,26 @@ function generateNotificationContent(type: NotificationType, data: NotificationD
         smsBody: `Reminder: ${data.facilityType} ${data.date} ${data.startTime}. ${queueInfo ? queueInfo + ' ' : ''}${manageUrl}`
       }
 
+    case 'BOOKING_CONFIRM_CHECK': {
+      const checkUrl = data.bookingId ? `${appUrl}/booking-check/${data.bookingId}` : manageUrl
+      return {
+        subject: 'Still coming? Confirm your booking',
+        emailBody: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">Do you still want this booking?</h2>
+            <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p style="margin: 5px 0;"><strong>Facility:</strong> ${data.facilityType}</p>
+              <p style="margin: 5px 0;"><strong>Date:</strong> ${data.date}</p>
+              <p style="margin: 5px 0;"><strong>Time:</strong> ${data.startTime}</p>
+            </div>
+            <p style="color: #6b7280; font-size: 14px;">It starts in about 2 hours. If you can't make it, please free up the slot for someone else.</p>
+            <a href="${checkUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">Review Booking</a>
+          </div>
+        `,
+        smsBody: `Still coming? ${data.facilityType} ${data.date} ${data.startTime}. ${checkUrl}`
+      }
+    }
+
     case 'QUEUE_SLOT_AVAILABLE':
       return {
         subject: '🎉 Slot Available!',
@@ -275,11 +313,11 @@ function generateNotificationContent(type: NotificationType, data: NotificationD
               <p style="margin: 5px 0;"><strong>Date:</strong> ${data.date}</p>
               <p style="margin: 5px 0;"><strong>Time:</strong> ${data.startTime}</p>
             </div>
-            <p style="color: #dc2626; font-weight: 600;">⚠️ You have 30 minutes to claim this slot!</p>
+            <p style="color: #dc2626; font-weight: 600;">⚠️ You have ${QUEUE_CLAIM_WINDOW_MINUTES} minutes to claim this slot!</p>
             <a href="${claimUrl}" style="display: inline-block; background: #16a34a; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px;">Claim Slot Now</a>
           </div>
         `,
-        smsBody: `SLOT AVAILABLE! ${data.facilityType} ${data.date} ${data.startTime}. Claim in 30min: ${claimUrl}`
+        smsBody: `SLOT AVAILABLE! ${data.facilityType} ${data.date} ${data.startTime}. Claim in ${QUEUE_CLAIM_WINDOW_MINUTES}min: ${claimUrl}`
       }
 
     case 'ACCOUNT_VERIFIED':

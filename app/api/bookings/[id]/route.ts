@@ -6,6 +6,48 @@ import { notifyNextInQueue, notifyLibraryQueueAfterCancellation } from "@/lib/qu
 
 export const dynamic = 'force-dynamic'
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const userId = (session.user as any).id
+    const booking = await prisma.booking.findUnique({ where: { id: params.id } })
+
+    if (!booking) {
+      return NextResponse.json({ error: "Booking not found" }, { status: 404 })
+    }
+
+    if (booking.userId !== userId) {
+      return NextResponse.json({ error: "You can only view your own bookings" }, { status: 403 })
+    }
+
+    const bookingStartTime = parseSlotDateTime(booking.date, booking.startTime)
+    const minutesUntilStart = (bookingStartTime.getTime() - Date.now()) / (1000 * 60)
+
+    return NextResponse.json({
+      booking: {
+        id: booking.id,
+        facilityType: booking.facilityType,
+        bookingType: booking.bookingType,
+        equipmentType: booking.equipmentType,
+        date: booking.date,
+        startTime: booking.startTime,
+        duration: booking.duration,
+      },
+      canCancel: minutesUntilStart > 30,
+    })
+  } catch (error) {
+    console.error("Get booking error:", error)
+    return NextResponse.json({ error: "Failed to load booking" }, { status: 500 })
+  }
+}
+
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }

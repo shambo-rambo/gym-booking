@@ -12,7 +12,6 @@ const updateSettingsSchema = z.object({
 })
 
 const updateProfileSchema = z.object({
-  name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Invalid email address"),
   currentPassword: z.string().optional()
 })
@@ -35,7 +34,8 @@ export async function GET(request: NextRequest) {
         phoneNumber: true,
         notificationPreference: true,
         apartmentNumber: true,
-        password: true
+        password: true,
+        twoFactorEnabled: true
       }
     })
 
@@ -106,7 +106,7 @@ export async function PUT(request: NextRequest) {
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },
-      data: { name: validatedData.name, email: validatedData.email },
+      data: { email: validatedData.email },
       select: { email: true, name: true, phoneNumber: true, notificationPreference: true, apartmentNumber: true }
     })
 

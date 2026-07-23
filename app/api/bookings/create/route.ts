@@ -12,10 +12,12 @@ import {
   checkSessionLimit,
   parseSlotDateTime,
   EXCLUSIVE_TYPES,
+  LAST_MINUTE_BYPASS_MINUTES,
 } from "@/lib/booking-rules"
 import { sendNotification } from "@/lib/notifications"
 import { format } from "date-fns"
 import { parseLocalDate } from "@/lib/date-utils"
+import { generateBookingICS } from "@/lib/ics"
 
 export const dynamic = 'force-dynamic'
 
@@ -52,14 +54,26 @@ async function createExclusiveBothBooking(
   }
 
   const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - Date.now()) / (1000 * 60)
-  const isLastMinute = minutesUntilSlot <= 180
+  const isLastMinute = minutesUntilSlot <= LAST_MINUTE_BYPASS_MINUTES
+  const facilities = [FacilityType.GYM, FacilityType.SAUNA] as const
+
+  // The daily 1-hour limit is never bypassed, even last-minute — otherwise a resident
+  // could stack extra time onto an already-maxed-out day as the clock ticks down.
+  const dailyResults = await Promise.all(
+    facilities.map((facility) =>
+      checkDailyLimit(userId, facility, date, startTime, duration).then((r) => ({ ...r, facility }))
+    )
+  )
+  const failedDaily = dailyResults.find((r) => !r.allowed)
+  if (failedDaily) {
+    const label = failedDaily.facility === FacilityType.GYM ? "Gym" : "Sauna"
+    return NextResponse.json({ error: `${label}: ${failedDaily.reason}` }, { status: 400 })
+  }
 
   if (!isLastMinute) {
-    const facilities = [FacilityType.GYM, FacilityType.SAUNA] as const
     const results = await Promise.all(
       facilities.flatMap((facility) => [
         checkSessionLimit(userId, facility).then((r) => ({ ...r, facility })),
-        checkDailyLimit(userId, facility, date, startTime, duration).then((r) => ({ ...r, facility })),
         checkConsecutiveDays(userId, facility, date, startTime).then((r) => ({ ...r, facility })),
       ])
     )
@@ -109,12 +123,23 @@ async function createExclusiveBothBooking(
       where: { userId, facilityType: { in: [FacilityType.GYM, FacilityType.SAUNA] }, date, startTime, duration }
     }).catch((err) => console.error('[Booking] Queue cleanup failed:', err))
 
+    const icsContent = generateBookingICS({
+      id: bookings[0].id,
+      facilityType: bookings[0].facilityType,
+      bookingType: 'EXCLUSIVE_BOTH',
+      date,
+      startTime,
+      duration,
+    })
+
     sendNotification(user, 'BOOKING_CONFIRMATION', {
       facilityType: 'Gym & Sauna',
       bookingType: 'Exclusive',
       date: format(date, 'EEEE, MMMM d, yyyy'),
       startTime,
       duration,
+      icsContent,
+      icsFilename: 'booking.ics',
     }).catch((err) => console.error('[Booking] Notification failed:', err))
 
     const primary = bookings.find((b) => b.facilityType === requestedFacilityType) ?? bookings[0]
@@ -241,6 +266,16 @@ export async function POST(request: NextRequest) {
           date: format(booking.date, 'EEEE, MMMM d, yyyy'),
           startTime: booking.startTime,
           duration: booking.duration,
+          icsContent: generateBookingICS({
+            id: booking.id,
+            facilityType: booking.facilityType,
+            bookingType: booking.bookingType,
+            date: booking.date,
+            startTime: booking.startTime,
+            duration: booking.duration,
+            endTime: booking.endTime,
+          }),
+          icsFilename: 'booking.ics',
         }).catch(err => console.error('[Booking] Notification failed:', err))
 
         return NextResponse.json({
@@ -306,24 +341,28 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Last-minute bypass: slots starting within 3 hours skip all three limit checks.
-    // Capacity rules (isSlotAvailable, the transaction re-check) still apply normally.
+    // Last-minute bypass: slots starting within LAST_MINUTE_BYPASS_MINUTES skip the
+    // session-count and consecutive-day checks. The daily 1-hour limit is never bypassed
+    // — otherwise a resident could stack extra time onto an already-maxed-out day as the
+    // clock ticks down. Capacity rules (isSlotAvailable, the transaction re-check) still
+    // apply normally regardless.
     const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - Date.now()) / (1000 * 60)
-    const isLastMinute = minutesUntilSlot <= 180
+    const isLastMinute = minutesUntilSlot <= LAST_MINUTE_BYPASS_MINUTES
 
-    // Validations 3-5: run all read-only checks in parallel (skipped for last-minute slots)
+    const dailyCheck = await checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration)
+    if (!dailyCheck.allowed) {
+      return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
+    }
+
+    // Validations 4-5: run remaining read-only checks in parallel (skipped for last-minute slots)
     if (!isLastMinute) {
-      const [sessionCheck, dailyCheck, consecutiveCheck] = await Promise.all([
+      const [sessionCheck, consecutiveCheck] = await Promise.all([
         checkSessionLimit(userId, facilityType as FacilityType),
-        checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration),
         checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime),
       ])
 
       if (!sessionCheck.allowed) {
         return NextResponse.json({ error: sessionCheck.reason }, { status: 400 })
-      }
-      if (!dailyCheck.allowed) {
-        return NextResponse.json({ error: dailyCheck.reason }, { status: 400 })
       }
       if (!consecutiveCheck.allowed) {
         return NextResponse.json({ error: consecutiveCheck.reason }, { status: 400 })
@@ -366,6 +405,10 @@ export async function POST(request: NextRequest) {
           if (!distinctExistingUsers.has(userId) && distinctExistingUsers.size >= 2) {
             throw new Error("Gym is full (2 people max).")
           }
+          // Equipment isn't physically shareable — one holder at a time.
+          if (equipmentType && overlapping.some(b => b.equipmentType === equipmentType && b.userId !== userId)) {
+            throw new Error("That equipment is already booked for this time.")
+          }
         }
 
         // Create the booking
@@ -405,7 +448,17 @@ export async function POST(request: NextRequest) {
         equipmentType: booking.equipmentType?.toString(),
         date: format(booking.date, 'EEEE, MMMM d, yyyy'),
         startTime: booking.startTime,
-        duration: booking.duration
+        duration: booking.duration,
+        icsContent: generateBookingICS({
+          id: booking.id,
+          facilityType: booking.facilityType,
+          bookingType: booking.bookingType,
+          equipmentType: booking.equipmentType,
+          date: booking.date,
+          startTime: booking.startTime,
+          duration: booking.duration,
+        }),
+        icsFilename: 'booking.ics',
       }).catch(err => console.error('[Booking] Notification failed:', err))
 
       return NextResponse.json({

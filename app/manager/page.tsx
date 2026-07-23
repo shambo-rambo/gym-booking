@@ -12,7 +12,7 @@ const CARDS = [
   {
     href: "/manager/messages",
     title: "Send a message",
-    description: "Notify residents by app, email, or text",
+    description: "Notify residents by app, email, or SMS",
     icon: MessageSquare,
   },
   {

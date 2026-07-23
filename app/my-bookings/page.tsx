@@ -8,6 +8,7 @@ import Navbar from "@/components/Navbar"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { format, formatDistanceToNow } from "date-fns"
+import { LAST_MINUTE_BYPASS_MINUTES } from "@/lib/booking-constants"
 import { CalendarPlus, Clock, RotateCcw } from "lucide-react"
 import { EQUIPMENT_LABELS } from "@/lib/equipment"
 import type { EquipmentType } from "@prisma/client"
@@ -221,7 +222,7 @@ export default function MyBookingsPage() {
                 const [slotH, slotM] = entry.startTime.split(':').map(Number)
                 slotDateTime.setHours(slotH, slotM, 0, 0)
                 const minutesUntilSlot = (slotDateTime.getTime() - Date.now()) / (1000 * 60)
-                const isLastMinute = minutesUntilSlot > 0 && minutesUntilSlot <= 180
+                const isLastMinute = minutesUntilSlot > 0 && minutesUntilSlot <= LAST_MINUTE_BYPASS_MINUTES
                 return (
                   <div
                     key={entry.id}
@@ -357,6 +358,11 @@ export default function MyBookingsPage() {
                         {equipment.map(e => equipmentLabel(e)).join(", ")}
                       </p>
                     )}
+                    <Button asChild variant="outline" size="sm" className="w-full mb-2">
+                      <a href={`/api/bookings/${s.ids[0]}/ics`} download>
+                        <CalendarPlus className="w-4 h-4" /> Add to Calendar
+                      </a>
+                    </Button>
                     {!canCancel && (
                       <p className="text-xs text-amber-600 mb-2">
                         Cannot cancel within 30 minutes of start

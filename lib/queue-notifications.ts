@@ -2,11 +2,11 @@ import { prisma } from "./prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { sendNotification } from "./notifications"
 import { format } from "date-fns"
-import { isSlotAvailable } from "./booking-rules"
+import { isSlotAvailable, LAST_MINUTE_BYPASS_MINUTES, QUEUE_CLAIM_WINDOW_MINUTES } from "./booking-rules"
 
 /**
  * Notify the next person in queue when a slot becomes available
- * Sets their notifiedAt and expiresAt (30 minutes to claim)
+ * Sets their notifiedAt and expiresAt (QUEUE_CLAIM_WINDOW_MINUTES to claim)
  */
 export async function notifyNextInQueue(
   facilityType: FacilityType,
@@ -38,9 +38,9 @@ export async function notifyNextInQueue(
     return null
   }
 
-  // Set their notification time and expiry (30 minutes from now)
+  // Set their notification time and expiry
   const now = new Date()
-  const expiresAt = new Date(now.getTime() + 30 * 60 * 1000) // 30 minutes
+  const expiresAt = new Date(now.getTime() + QUEUE_CLAIM_WINDOW_MINUTES * 60 * 1000)
 
   const updated = await prisma.queueEntry.update({
     where: { id: nextInQueue.id },
@@ -66,7 +66,7 @@ export async function notifyNextInQueue(
 }
 
 /**
- * Expire queue claims that haven't been claimed within the 30-minute window
+ * Expire queue claims that haven't been claimed within the claim window
  * Notify the next person in line
  */
 export async function expireUnclaimedQueueSlots() {
@@ -103,17 +103,17 @@ export async function expireUnclaimedQueueSlots() {
 }
 
 /**
- * 3-hour rule: if a slot is still available 3 hours before it starts and
- * someone is in the waitlist queue for it, notify the first person so they
- * can claim it. Runs once per hour via cron.
+ * Last-minute bypass rule: if a slot is still available within LAST_MINUTE_BYPASS_MINUTES
+ * of it starting and someone is in the waitlist queue for it, notify the first person so
+ * they can claim it. Runs once per hour via cron.
  */
 export async function releaseWaitlistedSlots() {
   const now = new Date()
 
-  // Notify for any unnotified slot starting in the future within 3.5 hours.
-  // Previously this was a narrow 2.5–3.5h band; widening to the full window ensures
-  // entries created after the band already passed are still caught on the next cron run.
-  const windowEnd = new Date(now.getTime() + 3.5 * 60 * 60 * 1000)
+  // Notify for any unnotified slot starting in the future within the bypass window plus a
+  // 30-minute buffer, so entries created after a narrower window already passed are still
+  // caught on the next hourly cron run.
+  const windowEnd = new Date(now.getTime() + (LAST_MINUTE_BYPASS_MINUTES + 30) * 60 * 1000)
 
   // Find unnotified queue entries — we'll filter by slot time in code
   const pendingEntries = await prisma.queueEntry.findMany({
@@ -158,7 +158,7 @@ export async function releaseWaitlistedSlots() {
       entry.duration
     )
     releasedCount++
-    console.log(`[3hr release] Notified queue for ${entry.facilityType} ${entry.date.toISOString()} ${entry.startTime}`)
+    console.log(`[last-minute release] Notified queue for ${entry.facilityType} ${entry.date.toISOString()} ${entry.startTime}`)
   }
 
   return releasedCount

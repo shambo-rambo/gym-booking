@@ -112,5 +112,5 @@ Imported per resident: name, email, apartment number, mobile (optional), residen
 ## Open items
 
 - Brand colours for the two modes.
-- Twilio per-text cost, to make the estimate on the review screen accurate.
+- ClickSend per-text cost, to make the estimate on the review screen accurate.
 - Whether multiple fobs per resident are needed, to be decided when the door-log feature is built.

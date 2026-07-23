@@ -2,6 +2,8 @@ import { prisma } from "./prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { startOfWeek, endOfWeek } from "date-fns"
 
+export { LAST_MINUTE_BYPASS_MINUTES, QUEUE_CLAIM_WINDOW_MINUTES } from "./booking-constants"
+
 export function getWeekStart(date: Date): Date {
   return startOfWeek(date, { weekStartsOn: 1 })
 }
@@ -31,7 +33,8 @@ function toMinutes(time: string): number {
   return h * 60 + m
 }
 
-// Rule 1: No same start time on consecutive days (shared or exclusive)
+// Rule 1: No same start time on consecutive days — applies equally to exclusive and
+// shared bookings.
 export async function checkConsecutiveDays(
   userId: string,
   facilityType: FacilityType,
@@ -172,10 +175,14 @@ export async function isSlotAvailable(
       return { allowed: false, reason: "Sauna is full (2 people max)." }
     }
   } else {
-    // Gym shared — max 2 distinct people, plus per equipment type
+    // Gym shared — max 2 distinct people, and each piece of equipment can only
+    // be held by one person at a time (it's not physically shareable).
     const distinctUsers = new Set(overlapping.map(b => b.userId)).size
     if (distinctUsers >= 2) {
       return { allowed: false, reason: "Gym is full (2 people max)." }
+    }
+    if (equipmentType && overlapping.some(b => b.equipmentType === equipmentType)) {
+      return { allowed: false, reason: "That equipment is already booked for this time." }
     }
   }
 
@@ -189,9 +196,13 @@ export function validateBookingTime(
   duration: number
 ): ValidationResult {
   const now = new Date()
-  const slotDateTime = parseSlotDateTime(date, startTime)
+  const [hours, minutes] = startTime.split(':').map(Number)
 
-  if (slotDateTime < now) {
+  // A slot stays bookable for the whole hour it falls in, not just up to its exact
+  // start minute — e.g. the 3:00 slot can still be booked at 3:45 if nobody's taken it.
+  const slotHourEnd = new Date(date)
+  slotHourEnd.setHours(hours + 1, 0, 0, 0)
+  if (slotHourEnd <= now) {
     return { allowed: false, reason: "Cannot book a slot in the past." }
   }
 
@@ -205,8 +216,6 @@ export function validateBookingTime(
     return { allowed: false, reason: "Cannot book more than 7 days in advance." }
   }
 
-  const [hours, minutes] = startTime.split(':').map(Number)
-
   if (hours < 6) {
     return { allowed: false, reason: "Facilities open at 6:00 AM." }
   }
@@ -219,6 +228,10 @@ export function validateBookingTime(
 
   if (duration !== 30 && duration !== 60) {
     return { allowed: false, reason: "Duration must be 30 or 60 minutes." }
+  }
+
+  if (duration === 60 && minutes !== 0) {
+    return { allowed: false, reason: "60-minute sessions must start on the hour." }
   }
 
   return { allowed: true }

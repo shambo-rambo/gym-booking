@@ -112,11 +112,15 @@ export function BookAgainDialog({ open, onClose, session, onSuccess }: Props) {
   }
 
   const visibleTimes = ALL_SLOTS.filter(time => {
+    // 60-minute sessions must start on the hour.
+    if (session.duration === 60 && !time.endsWith(":00")) return false
     if (!isSameDay(selectedDate, today)) return true
-    const [h, m] = time.split(":").map(Number)
-    const t = new Date()
-    t.setHours(h, m, 0, 0)
-    return t > new Date()
+    // A slot stays visible/bookable for its whole hour, not just up to its exact
+    // start minute — e.g. the 3:00 slot is still shown at 3:45 if not yet taken.
+    const [h] = time.split(":").map(Number)
+    const hourEnd = new Date()
+    hourEnd.setHours(h + 1, 0, 0, 0)
+    return hourEnd > new Date()
   })
 
   const handleDateSelect = (day: Date) => {

@@ -26,12 +26,13 @@ type User = {
   status: string
   notificationPreference: string
   residencyType: string | null
-  fobNumber: string | null
   createdAt: string
 }
 
+type Fob = { id: string; apartmentNumber: number; fobNumber: string }
+
 const RESIDENCY_LABELS: Record<string, string> = {
-  TENANT: "Tenant",
+  TENANT: "Resident",
   OWNER_OCCUPIER: "Owner-occupier",
   NON_RESIDENT_OWNER: "Non-resident owner",
 }
@@ -77,7 +78,7 @@ export default function ManagerUsersPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ name: "", email: "", apartmentNumber: "", phoneNumber: "", residencyType: "", fobNumber: "", notificationPreference: "EMAIL_ONLY", newPassword: "" })
+  const [editForm, setEditForm] = useState({ name: "", email: "", apartmentNumber: "", phoneNumber: "", residencyType: "", notificationPreference: "EMAIL_ONLY", newPassword: "" })
   const [editError, setEditError] = useState("")
   const [importOpen, setImportOpen] = useState(false)
   const [importText, setImportText] = useState("")
@@ -85,6 +86,14 @@ export default function ManagerUsersPage() {
   const [importError, setImportError] = useState("")
   const [importSuccess, setImportSuccess] = useState("")
   const [singleForm, setSingleForm] = useState({ name: "", email: "", apartmentNumber: "", phoneNumber: "", residencyType: "", fobNumber: "" })
+
+  // Fobs belong to the apartment being edited, not the specific resident — fetched
+  // fresh whenever the edit card opens, managed via their own immediate API calls.
+  const [editFobs, setEditFobs] = useState<Fob[]>([])
+  const [editFobsLoading, setEditFobsLoading] = useState(false)
+  const [newFobNumber, setNewFobNumber] = useState("")
+  const [fobError, setFobError] = useState("")
+  const [fobActionLoading, setFobActionLoading] = useState(false)
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login")
@@ -162,10 +171,63 @@ export default function ManagerUsersPage() {
       apartmentNumber: String(user.apartmentNumber),
       phoneNumber: user.phoneNumber ?? "",
       residencyType: user.residencyType ?? "",
-      fobNumber: user.fobNumber ?? "",
       notificationPreference: user.notificationPreference ?? "EMAIL_ONLY",
       newPassword: "",
     })
+    fetchFobsForApartment(user.apartmentNumber)
+  }
+
+  const fetchFobsForApartment = async (apartmentNumber: number) => {
+    setEditFobsLoading(true)
+    setFobError("")
+    setNewFobNumber("")
+    try {
+      const res = await fetch(`/api/manager/fobs?apartmentNumber=${apartmentNumber}`)
+      if (res.ok) setEditFobs((await res.json()).fobs)
+    } catch {
+      console.error("Failed to fetch fobs")
+    } finally {
+      setEditFobsLoading(false)
+    }
+  }
+
+  const handleAddFob = async (apartmentNumber: number) => {
+    setFobError("")
+    if (!/^\d{3}$/.test(newFobNumber)) {
+      setFobError("Enter the last 3 digits of the fob number")
+      return
+    }
+    setFobActionLoading(true)
+    try {
+      const res = await fetch("/api/manager/fobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apartmentNumber, fobNumber: newFobNumber }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFobError(data.error || "Failed to add fob")
+        return
+      }
+      setNewFobNumber("")
+      await fetchFobsForApartment(apartmentNumber)
+    } catch {
+      setFobError("Failed to add fob")
+    } finally {
+      setFobActionLoading(false)
+    }
+  }
+
+  const handleRemoveFob = async (fobId: string, apartmentNumber: number) => {
+    setFobActionLoading(true)
+    try {
+      await fetch(`/api/manager/fobs/${fobId}`, { method: "DELETE" })
+      await fetchFobsForApartment(apartmentNumber)
+    } catch {
+      setFobError("Failed to remove fob")
+    } finally {
+      setFobActionLoading(false)
+    }
   }
 
   const handleSaveEdit = async (userId: string) => {
@@ -185,7 +247,6 @@ export default function ManagerUsersPage() {
           apartmentNumber: parseInt(editForm.apartmentNumber, 10),
           phoneNumber: editForm.phoneNumber || null,
           residencyType: editForm.residencyType || null,
-          fobNumber: editForm.fobNumber || null,
           notificationPreference: editForm.notificationPreference,
           newPassword: editForm.newPassword || undefined,
         }),
@@ -368,28 +429,68 @@ export default function ManagerUsersPage() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="EMAIL_ONLY">Email only</SelectItem>
-                  <SelectItem value="SMS_ONLY">Text only</SelectItem>
-                  <SelectItem value="BOTH">Email and text</SelectItem>
+                  <SelectItem value="SMS_ONLY">SMS only</SelectItem>
+                  <SelectItem value="BOTH">Email and SMS</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Residency type</Label>
-                <Select value={editForm.residencyType} onValueChange={(v) => setEditForm((f) => ({ ...f, residencyType: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="TENANT">Tenant</SelectItem>
-                    <SelectItem value="OWNER_OCCUPIER">Owner-occupier</SelectItem>
-                    <SelectItem value="NON_RESIDENT_OWNER">Non-resident owner</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <Label>Fob number (optional)</Label>
-                <Input value={editForm.fobNumber} onChange={(e) => setEditForm((f) => ({ ...f, fobNumber: e.target.value }))} />
-              </div>
+            <div className="space-y-1">
+              <Label>Residency type</Label>
+              <Select value={editForm.residencyType} onValueChange={(v) => setEditForm((f) => ({ ...f, residencyType: v }))}>
+                <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="TENANT">Resident</SelectItem>
+                  <SelectItem value="OWNER_OCCUPIER">Owner-occupier</SelectItem>
+                  <SelectItem value="NON_RESIDENT_OWNER">Non-resident owner</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            <div className="space-y-1">
+              <Label>Apartment {user.apartmentNumber}'s fobs</Label>
+              <p className="text-xs text-gray-500 mb-1">Fobs belong to the apartment, not this resident — every unit needs at least one on file.</p>
+              {editFobsLoading ? (
+                <p className="text-xs text-gray-400">Loading…</p>
+              ) : (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {editFobs.length === 0 && <p className="text-xs text-amber-600">No fobs on file for this apartment yet.</p>}
+                  {editFobs.map((fob) => (
+                    <Badge key={fob.id} variant="secondary" className="gap-1.5 pr-1">
+                      {fob.fobNumber}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFob(fob.id, user.apartmentNumber)}
+                        disabled={fobActionLoading}
+                        className="ml-1 text-gray-500 hover:text-red-600"
+                        aria-label={`Remove fob ${fob.fobNumber}`}
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Last 3 digits"
+                  maxLength={3}
+                  value={newFobNumber}
+                  onChange={(e) => setNewFobNumber(e.target.value.replace(/\D/g, ""))}
+                  className="max-w-[140px]"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={fobActionLoading}
+                  onClick={() => handleAddFob(user.apartmentNumber)}
+                >
+                  Add Fob
+                </Button>
+              </div>
+              {fobError && <p className="text-xs text-red-600 mt-1">{fobError}</p>}
+            </div>
+
             {editError && <p className="text-sm text-red-600">{editError}</p>}
             <div className="flex gap-2">
               <Button size="sm" onClick={() => handleSaveEdit(user.id)} disabled={actionLoading === user.id}>
@@ -519,15 +620,20 @@ export default function ManagerUsersPage() {
                     <Select value={singleForm.residencyType} onValueChange={(v) => setSingleForm((f) => ({ ...f, residencyType: v }))}>
                       <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="TENANT">Tenant</SelectItem>
+                        <SelectItem value="TENANT">Resident</SelectItem>
                         <SelectItem value="OWNER_OCCUPIER">Owner-occupier</SelectItem>
                         <SelectItem value="NON_RESIDENT_OWNER">Non-resident owner</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1">
-                    <Label>Fob number (optional)</Label>
-                    <Input value={singleForm.fobNumber} onChange={(e) => setSingleForm((f) => ({ ...f, fobNumber: e.target.value }))} />
+                    <Label>Fob — last 3 digits (optional here, add later if unset)</Label>
+                    <Input
+                      maxLength={3}
+                      placeholder="e.g. 292"
+                      value={singleForm.fobNumber}
+                      onChange={(e) => setSingleForm((f) => ({ ...f, fobNumber: e.target.value.replace(/\D/g, "") }))}
+                    />
                   </div>
                 </div>
                 {importError && <p className="text-sm text-red-600">{importError}</p>}
@@ -541,7 +647,7 @@ export default function ManagerUsersPage() {
                 <p className="text-sm text-on-surface-variant">
                   Paste one resident per line: <code className="text-xs">name, email, unit, mobile, residencyType, fobNumber</code>
                   <br />
-                  residencyType is one of TENANT, OWNER_OCCUPIER, NON_RESIDENT_OWNER. Mobile and fob number are optional.
+                  residencyType is one of TENANT, OWNER_OCCUPIER, NON_RESIDENT_OWNER. Mobile is optional. Fob number is the last 3 digits, optional here (add it to the unit's fob list later if unset).
                 </p>
                 <textarea
                   className="w-full h-40 border rounded-md p-2 text-sm font-mono"

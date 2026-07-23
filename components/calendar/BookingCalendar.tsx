@@ -11,6 +11,7 @@ import { BookingDialog } from "./BookingDialog"
 import { cn } from "@/lib/utils"
 import type { DayAvailability, DisplayStatus, SlotAvailability } from "@/lib/types"
 import { EQUIPMENT_LABELS } from "@/lib/equipment"
+import { isPeakTime } from "@/lib/peak-time"
 
 interface BookingCalendarProps {
   facilityType: FacilityType
@@ -35,68 +36,62 @@ function getPeriod(time: string): string {
   return "Night"
 }
 
-function getSlotStatus(slot: SlotAvailability | undefined): DisplayStatus {
+// Peak and off-peak slots each have two independently-computed duration entries (30
+// and 60 min), and they can genuinely disagree — e.g. a 60-min entry can overlap an
+// existing booking while the 30-min entry at the same start time doesn't. Rather than
+// trying to reconcile two possibly-conflicting statuses, the tile's overall status is
+// judged from the one duration a click would actually default to (30 min in peak
+// hours, 60 min off-peak) — "yours"/"queued" still check across both, since those are
+// exact-match concerns regardless of which duration the user originally booked.
+function getSlotStatus(slot: SlotAvailability | undefined, time: string): DisplayStatus {
   if (!slot?.durations?.length) return "available"
   if (slot.durations.some((d) => d.userBooking !== null)) return "yours"
   if (slot.durations.some((d) => d.userQueueEntry !== null)) return "queued"
-  if (slot.durations.some((d) => d.exclusive?.status === "blocked")) return "blocked"
-  const allFull = slot.durations.every((d) => {
-    const sharedFull =
-      d.shared &&
-      Object.values(d.shared).every((s) => s === "booked" || s === "full")
-    return d.bookedCount >= 2 || sharedFull
-  })
-  if (allFull) return "full"
-  const allUnavailable = slot.durations.every(
-    (d) => d.exclusive?.status === "unavailable"
-  )
-  if (allUnavailable) return "unavailable"
-  // Use the 30-min duration to decide "partial". Its exclusive.status === "booked"
-  // means there are actual overlapping bookings in that 30-min window (someone is
-  // genuinely in the gym at this start time). Checking only the 30-min avoids the
-  // false positive where a 07:00 booking bleeds into the 06:30 60-min window without
-  // anyone having booked the 06:30 slot itself.
-  const slot30 = slot.durations.find((d) => d.duration === 30)
-  const isPartial = !!slot30 &&
-    slot30.exclusive?.status === "booked" &&
+
+  const defaultDuration = isPeakTime(time) ? 30 : 60
+  const d = slot.durations.find((x) => x.duration === defaultDuration) ?? slot.durations[0]
+  if (!d) return "available"
+
+  if (d.exclusive?.status === "blocked") return "blocked"
+  const sharedFull = !!d.shared && Object.values(d.shared).every((s) => s === "booked" || s === "full")
+  if (d.bookedCount >= 2 || sharedFull) return "full"
+  if (d.exclusive?.status === "unavailable") return "unavailable"
+  const isPartial =
+    d.exclusive?.status === "booked" &&
     (() => {
-      const vals = slot30.shared ? Object.values(slot30.shared) : []
+      const vals = d.shared ? Object.values(d.shared) : []
       return vals.some((s) => s === "booked") && vals.some((s) => s === "available")
     })()
   if (isPartial) return "partial"
   return "available"
 }
 
-function getStatusText(slot: SlotAvailability | undefined, status: DisplayStatus): string {
+function getStatusText(slot: SlotAvailability | undefined, status: DisplayStatus, time: string): string {
+  const defaultDuration = isPeakTime(time) ? 30 : 60
+  const d = slot?.durations?.find((x) => x.duration === defaultDuration) ?? slot?.durations?.[0]
   switch (status) {
     case "yours": {
-      const d = slot?.durations?.find((d) => d.userBooking !== null)
-      if (d?.userBooking?.bookingType === "EXCLUSIVE") return "Your booking · Private"
-      if (d?.userBooking?.bookingType === "EXCLUSIVE_BOTH") return "Your booking · Exclusive"
+      const yd = slot?.durations?.find((d) => d.userBooking !== null)
+      if (yd?.userBooking?.bookingType === "EXCLUSIVE") return "Your booking · Private"
+      if (yd?.userBooking?.bookingType === "EXCLUSIVE_BOTH") return "Your booking · Exclusive"
       return "Your booking · Shared"
     }
     case "queued": {
-      const d = slot?.durations?.find((d) => d.userQueueEntry !== null)
-      return d?.userQueueEntry?.position
-        ? `Queue #${d.userQueueEntry.position}`
+      const qd = slot?.durations?.find((d) => d.userQueueEntry !== null)
+      return qd?.userQueueEntry?.position
+        ? `Queue #${qd.userQueueEntry.position}`
         : "In queue"
     }
     case "partial": return "Share available"
     case "full": {
-      const maxQueue = Math.max(
-        slot?.durations?.[0]?.queueCount ?? 0,
-        slot?.durations?.[1]?.queueCount ?? 0
-      )
-      return maxQueue > 0 ? `Full · ${maxQueue} waiting` : "Fully booked"
+      const queueCount = d?.queueCount ?? 0
+      return queueCount > 0 ? `Full · ${queueCount} waiting` : "Fully booked"
     }
     case "blocked":     return "Maintenance"
     case "unavailable": return "Limit reached"
     default: {
-      const maxQueue = Math.max(
-        slot?.durations?.[0]?.queueCount ?? 0,
-        slot?.durations?.[1]?.queueCount ?? 0
-      )
-      return maxQueue > 0 ? `${maxQueue} in queue` : "Available"
+      const queueCount = d?.queueCount ?? 0
+      return queueCount > 0 ? `${queueCount} in queue` : "Available"
     }
   }
 }
@@ -209,8 +204,10 @@ export function BookingCalendar({
 
     return ALL_SLOTS.filter((time) => {
       if (todaySelected) {
-        const [h, m] = time.split(":").map(Number)
-        if (h * 60 + m <= nowMinutes) return false
+        // A slot stays visible/bookable for its whole hour, not just up to its exact
+        // start minute — e.g. the 3:00 slot is still shown at 3:45 if not yet taken.
+        const [h] = time.split(":").map(Number)
+        if ((h + 1) * 60 <= nowMinutes) return false
       }
       if (timeFilter === "morning")   return time >= "06:00" && time <= "11:30"
       if (timeFilter === "afternoon") return time >= "12:00" && time <= "16:30"
@@ -325,7 +322,9 @@ export function BookingCalendar({
         <div className="mb-5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <h3 className="text-xl font-bold tracking-tight text-primary">Select a Time</h3>
-            <p className="text-sm text-on-surface-variant">30 or 60 minute sessions</p>
+            <p className="text-sm text-on-surface-variant">
+              30 or 60 minute sessions &middot; <span className="text-orange-600 font-medium">peak hours (3&ndash;9pm)</span>
+            </p>
           </div>
           <div className="flex gap-2 flex-wrap">
             {(["all", "morning", "afternoon", "evening"] as const).map((f) => (
@@ -346,12 +345,15 @@ export function BookingCalendar({
         </div>
 
         {/* Legend */}
-        <div className="flex gap-4 mb-5">
+        <div className="flex gap-4 mb-5 flex-wrap">
           {[
             { color: "bg-secondary", label: "Available" },
-            { color: "bg-primary/30", label: "Yours" },
-            { color: "bg-secondary-container border border-secondary/20", label: "In Queue" },
-            { color: "bg-surface-dim", label: "Full / N/A" },
+            { color: "bg-primary", label: "Yours" },
+            { color: "bg-blue-400", label: "In Queue" },
+            { color: "bg-yellow-400", label: "Share Available" },
+            { color: "bg-red-400", label: "Full" },
+            { color: "bg-amber-400", label: "Limit Reached" },
+            { color: "bg-orange-400", label: "Peak (3–9pm)" },
           ].map(({ color, label }) => (
             <div key={label} className="flex items-center gap-1.5">
               <span className={cn("w-1.5 h-1.5 rounded-full", color)} />
@@ -391,10 +393,11 @@ export function BookingCalendar({
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {visibleSlots.map((time) => {
               const slot = dayData?.slots?.find((s) => s.startTime === time)
-              const status = getSlotStatus(slot)
-              const text = getStatusText(slot, status)
+              const status = getSlotStatus(slot, time)
+              const text = getStatusText(slot, status, time)
               const period = getPeriod(time)
               const isClickable = status !== "blocked"
+              const peak = isPeakTime(time)
 
               return (
                 <button
@@ -403,19 +406,20 @@ export function BookingCalendar({
                   disabled={!isClickable || !slot}
                   className={cn(
                     "relative p-5 rounded-xl text-left transition-all",
+                    peak && "border-t-[3px] border-t-orange-400",
                     status === "yours"
                       ? "bg-primary ring-4 ring-primary/10 shadow-card-lg"
                       : status === "queued"
-                      ? "bg-secondary-container border border-secondary/20 hover:ring-2 hover:ring-secondary/30"
+                      ? "bg-blue-50 border border-blue-300 hover:ring-2 hover:ring-blue-400/40 shadow-sm"
                       : status === "partial"
                       ? "bg-yellow-50 border border-yellow-300 hover:ring-2 hover:ring-yellow-400/40 shadow-sm active:scale-95"
                       : status === "full"
-                      ? "bg-surface-container-low border border-outline-variant/30 hover:ring-2 hover:ring-error/20"
+                      ? "bg-red-50 border border-red-300 hover:ring-2 hover:ring-red-400/30"
                       : status === "blocked"
                       ? "bg-surface-container-low opacity-50 cursor-not-allowed"
                       : status === "unavailable"
-                      ? "bg-surface-container-low border border-amber-200/50 hover:ring-2 hover:ring-amber-400/40 cursor-pointer"
-                      : "bg-white border border-outline-variant/30 hover:ring-2 hover:ring-secondary/30 shadow-sm active:scale-95"
+                      ? "bg-amber-50 border border-amber-300 hover:ring-2 hover:ring-amber-400/40 cursor-pointer"
+                      : "bg-secondary/10 border border-secondary/30 hover:ring-2 hover:ring-secondary/40 shadow-sm active:scale-95"
                   )}
                 >
                   {/* Status dot */}
@@ -423,9 +427,10 @@ export function BookingCalendar({
                     className={cn(
                       "absolute top-3 right-3 w-1.5 h-1.5 rounded-full",
                       status === "yours"      ? "bg-white/50" :
-                      status === "queued"     ? "bg-secondary" :
-                      status === "full"       ? "bg-error/60" :
+                      status === "queued"     ? "bg-blue-500" :
+                      status === "full"       ? "bg-red-500" :
                       status === "partial"    ? "bg-yellow-500" :
+                      status === "unavailable" ? "bg-amber-500" :
                       status === "available"  ? "bg-secondary" :
                       "bg-outline/40"
                     )}
@@ -434,18 +439,20 @@ export function BookingCalendar({
                   <span
                     className={cn(
                       "block text-[10px] font-bold uppercase tracking-widest mb-1",
-                      status === "yours" ? "text-white/60" : "text-outline"
+                      peak && status !== "yours" ? "text-orange-500" : status === "yours" ? "text-white/60" : "text-outline"
                     )}
                   >
-                    {period}
+                    {peak ? "Peak" : period}
                   </span>
                   <span
                     className={cn(
                       "block text-lg font-extrabold tracking-tight",
-                      status === "yours"    ? "text-white" :
-                      status === "queued"   ? "text-on-secondary-container" :
-                      status === "partial"  ? "text-yellow-800" :
-                      ["full","blocked","unavailable"].includes(status)
+                      status === "yours"       ? "text-white" :
+                      status === "queued"      ? "text-blue-900" :
+                      status === "partial"     ? "text-yellow-800" :
+                      status === "full"        ? "text-red-900" :
+                      status === "unavailable" ? "text-amber-900" :
+                      status === "blocked"
                         ? "text-on-surface-variant"
                         : "text-primary"
                     )}
@@ -455,9 +462,11 @@ export function BookingCalendar({
                   <span
                     className={cn(
                       "block text-[10px] mt-0.5",
-                      status === "yours"    ? "text-white/70" :
-                      status === "partial"  ? "text-yellow-700" :
-                      status === "full"     ? "text-error/80" :
+                      status === "yours"       ? "text-white/70" :
+                      status === "queued"      ? "text-blue-700" :
+                      status === "partial"     ? "text-yellow-700" :
+                      status === "full"        ? "text-red-700" :
+                      status === "unavailable" ? "text-amber-700" :
                       "text-on-surface-variant/70"
                     )}
                   >
@@ -494,6 +503,7 @@ export function BookingCalendar({
           startTime={selectedSlot.startTime}
           availability={selectedSlot.availability}
           defaultBookingType={defaultBookingType}
+          defaultDuration={isPeakTime(selectedSlot.startTime) ? 30 : 60}
           defaultEquipment={defaultEquipment}
           onBookingSuccess={handleBookingSuccess}
         />

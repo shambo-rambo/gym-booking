@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { notifyNextInQueue } from "@/lib/queue-notifications"
+import { LAST_MINUTE_BYPASS_MINUTES } from "@/lib/booking-rules"
 
 export const dynamic = 'force-dynamic'
 
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
       })
       .slice(0, 20)
 
-    // Fire last-minute notifications for any unnotified queue entries within 3 hours.
+    // Fire last-minute notifications for any unnotified queue entries within the bypass window.
     // notifyNextInQueue is idempotent (filters notifiedAt: null), so duplicate calls are safe.
     for (const entry of queueEntries) {
       if (entry.notifiedAt) continue
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
       const slotDateTime = new Date(entry.date)
       slotDateTime.setHours(h, m, 0, 0)
       const minutesUntilSlot = (slotDateTime.getTime() - rightNow.getTime()) / (1000 * 60)
-      if (minutesUntilSlot > 0 && minutesUntilSlot <= 180) {
+      if (minutesUntilSlot > 0 && minutesUntilSlot <= LAST_MINUTE_BYPASS_MINUTES) {
         notifyNextInQueue(
           entry.facilityType,
           entry.bookingType,

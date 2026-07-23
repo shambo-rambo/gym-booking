@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import LoadingSpinner from "@/components/LoadingSpinner"
-import { ChevronLeft, Home, Wrench, AlertTriangle, Megaphone, CalendarCheck, BellRing, Truck } from "lucide-react"
+import { ChevronLeft, Home, Wrench, AlertTriangle, Megaphone, CalendarCheck, BellRing, Truck, MessageCircleQuestion } from "lucide-react"
 
 type Category = "BOOKINGS" | "AMENITY" | "MAINTENANCE" | "URGENT" | "GENERAL" | "MOVE"
 
@@ -50,6 +50,7 @@ export default function NotificationSettingsPage() {
   const { data: session, status } = useSession()
   const [loading, setLoading] = useState(true)
   const [settings, setSettings] = useState<Record<Category, CategorySetting>>({} as any)
+  const [confirmBookingChecks, setConfirmBookingChecks] = useState(false)
   const [phoneNumber, setPhoneNumber] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -78,6 +79,7 @@ export default function NotificationSettingsPage() {
         const map: Record<Category, CategorySetting> = {} as any
         for (const s of data.settings as CategorySetting[]) map[s.category] = s
         setSettings(map)
+        setConfirmBookingChecks(!!data.confirmBookingChecks)
       }
       if (profileRes.ok) {
         const data = await profileRes.json()
@@ -177,7 +179,7 @@ export default function NotificationSettingsPage() {
       const res = await fetch("/api/user/notification-settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ settings: Object.values(settings) }),
+        body: JSON.stringify({ settings: Object.values(settings), confirmBookingChecks }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -201,8 +203,8 @@ export default function NotificationSettingsPage() {
     redirect("/login")
   }
 
-  const anyTextOn = Object.values(settings).some((s) => s?.sms)
-  const showPhoneWarning = anyTextOn && !phoneNumber
+  const anySmsOn = Object.values(settings).some((s) => s?.sms)
+  const showPhoneWarning = anySmsOn && !phoneNumber
 
   return (
     <div className="min-h-screen bg-surface">
@@ -254,6 +256,25 @@ export default function NotificationSettingsPage() {
             </CardContent>
           </Card>
 
+          {/* Interactive booking confirm */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageCircleQuestion className="w-5 h-5 text-secondary" />
+                "Still Coming?" Confirmation
+              </CardTitle>
+              <CardDescription>
+                2 hours before a booking, get a "Still coming?" alert with Yes/No — tap No to cancel instantly, right from the notification. Off by default.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-on-surface-variant">Enable interactive confirmation</span>
+                <Switch checked={confirmBookingChecks} onCheckedChange={setConfirmBookingChecks} />
+              </label>
+            </CardContent>
+          </Card>
+
           {/* Category rows */}
           <Card>
             <CardHeader>
@@ -282,13 +303,13 @@ export default function NotificationSettingsPage() {
 
                     {isUrgent && (
                       <p className="text-xs text-red-700 mb-3">
-                        Urgent alerts are reserved for serious or safety-related building communications and are always sent by text and email.
+                        Urgent alerts are reserved for serious or safety-related building communications and are always sent by SMS and email.
                       </p>
                     )}
 
                     <div className="grid grid-cols-3 gap-2">
                       <label className="flex flex-col items-center gap-1.5 text-xs font-medium text-on-surface-variant">
-                        Text
+                        SMS
                         <Switch
                           checked={s.sms}
                           disabled={isUrgent}
@@ -317,7 +338,7 @@ export default function NotificationSettingsPage() {
 
               {showPhoneWarning && (
                 <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
-                  Add a phone number in <Link href="/settings" className="underline font-medium">Settings</Link> to receive text messages.
+                  Add a phone number in <Link href="/settings" className="underline font-medium">Settings</Link> to receive SMS.
                 </div>
               )}
               {error && (

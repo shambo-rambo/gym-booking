@@ -57,7 +57,7 @@ export async function createAndSendNotice(params: CreateAndSendNoticeParams) {
   }
 
   // Fan out in small concurrent batches so we don't hammer Resend/ClickSend at once.
-  // Cascade per resident: text wins if they're reachable by SMS, otherwise they always
+  // Cascade per resident: SMS wins if they're reachable by SMS, otherwise they always
   // get the email (residents can opt out of SMS but not email — email carries things
   // like AGM votes). forceSms overrides recipients' own settings and sends SMS to
   // anyone with a phone on file.

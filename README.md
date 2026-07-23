@@ -128,9 +128,9 @@ The four jobs and their schedules:
 
 | Job | Route | Schedule | Purpose |
 |-----|-------|----------|---------|
-| `booking-reminders` | `/api/cron/booking-reminders` | Hourly | Sends reminder notifications 2 hours before upcoming bookings |
+| `booking-reminders` | `/api/cron/booking-reminders` | Hourly | Sends a reminder notification 2 hours before upcoming bookings — an interactive push+email with Yes/No actions for residents who've opted in (off by default), otherwise the plain reminder |
 | `expire-queue-claims` | `/api/cron/expire-queue-claims` | Every 5 min | Expires unclaimed queue notifications, notifies next person |
-| `release-waitlisted-slots` | `/api/cron/release-waitlisted-slots` | Hourly | Auto-releases slots 3 hours before session if queue exists |
+| `release-waitlisted-slots` | `/api/cron/release-waitlisted-slots` | Hourly | Auto-releases slots 1 hour before session if queue exists |
 | `amenity-audit` | `/api/cron/amenity-audit` | Weekly, Monday 3am | Reconciles Inception fob access logs against bookings for the past week |
 
 All routes require `Authorization: Bearer {CRON_SECRET}` — Cloud Scheduler sends this header.

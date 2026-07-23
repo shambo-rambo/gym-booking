@@ -390,6 +390,8 @@ async function testUserBookingIndicator() {
   await prisma.booking.delete({ where: { id: otherBooking.id } })
 }
 
+
+
 async function testQueueFunctionality() {
   console.log('\n=== Testing Queue Functionality ===\n')
 

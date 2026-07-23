@@ -39,6 +39,29 @@ export default auth((req) => {
     return NextResponse.redirect(new URL("/change-password", req.url))
   }
 
+  // Managers must have 2FA enabled — no grace period.
+  if (
+    session?.user &&
+    (session.user as any).twoFactorSetupRequired === true &&
+    pathname !== "/setup-2fa" &&
+    !pathname.startsWith("/api/") &&
+    !pathname.startsWith("/_next")
+  ) {
+    return NextResponse.redirect(new URL("/setup-2fa", req.url))
+  }
+
+  // Anyone with 2FA enabled must verify it once per session before proceeding.
+  if (
+    session?.user &&
+    (session.user as any).twoFactorEnabled === true &&
+    (session.user as any).twoFactorVerified === false &&
+    pathname !== "/verify-2fa" &&
+    !pathname.startsWith("/api/") &&
+    !pathname.startsWith("/_next")
+  ) {
+    return NextResponse.redirect(new URL("/verify-2fa", req.url))
+  }
+
   return NextResponse.next()
 })
 

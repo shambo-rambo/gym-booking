@@ -17,6 +17,14 @@ const registerSchema = z.object({
   buildingCode: z.string().optional(),
   notificationPreference: z.enum(["EMAIL_ONLY", "SMS_ONLY", "BOTH"]).default("EMAIL_ONLY"),
   residencyType: z.enum(["TENANT", "OWNER_OCCUPIER", "NON_RESIDENT_OWNER"]),
+  // Fobs belong to the apartment, not this specific resident. hasFob is a required,
+  // explicit choice (not silently skippable) — genuinely fob-less residents say so
+  // rather than leaving it blank.
+  hasFob: z.boolean(),
+  fobNumber: z.string().regex(/^\d{3}$/, "Fob number must be the last 3 digits").optional(),
+}).refine((data) => !data.hasFob || !!data.fobNumber, {
+  message: "Enter the last 3 digits of your fob number, or select \"I don't have a fob\".",
+  path: ["fobNumber"],
 })
 
 function escapeHtml(str: string): string {
@@ -86,6 +94,14 @@ export async function POST(request: NextRequest) {
         role: "RESIDENT",
       },
     })
+
+    if (validatedData.hasFob && validatedData.fobNumber) {
+      await prisma.fob.upsert({
+        where: { apartmentNumber_fobNumber: { apartmentNumber: validatedData.apartmentNumber, fobNumber: validatedData.fobNumber } },
+        create: { apartmentNumber: validatedData.apartmentNumber, fobNumber: validatedData.fobNumber },
+        update: {},
+      })
+    }
 
     await prisma.notificationSetting.createMany({
       data: [

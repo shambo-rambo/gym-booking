@@ -23,6 +23,8 @@ function RegisterForm() {
     apartmentNumber: "",
     buildingCode: codeFromUrl,
     residencyType: "",
+    hasFob: "" as "" | "yes" | "no",
+    fobNumber: "",
   })
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
@@ -46,7 +48,19 @@ function RegisterForm() {
     }
 
     if (!formData.residencyType) {
-      setError("Please select whether you're a tenant or owner")
+      setError("Please select whether you're a resident or owner")
+      setLoading(false)
+      return
+    }
+
+    if (!formData.hasFob) {
+      setError("Please let us know whether you have a building fob")
+      setLoading(false)
+      return
+    }
+
+    if (formData.hasFob === "yes" && !/^\d{3}$/.test(formData.fobNumber)) {
+      setError("Enter the last 3 digits of your fob number")
       setLoading(false)
       return
     }
@@ -59,6 +73,8 @@ function RegisterForm() {
           ...formData,
           apartmentNumber: aptNum,
           notificationPreference: "EMAIL_ONLY",
+          hasFob: formData.hasFob === "yes",
+          fobNumber: formData.hasFob === "yes" ? formData.fobNumber : undefined,
         }),
       })
 
@@ -148,10 +164,52 @@ function RegisterForm() {
                 required
               >
                 <option value="">Select one…</option>
-                <option value="TENANT">Tenant</option>
+                <option value="TENANT">Resident</option>
                 <option value="OWNER_OCCUPIER">Owner-occupier</option>
                 <option value="NON_RESIDENT_OWNER">Non-resident owner</option>
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Do you have a building fob?</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, hasFob: "yes" })}
+                  className={`flex-1 h-10 rounded-md border text-sm font-medium transition-colors ${
+                    formData.hasFob === "yes"
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-input bg-background text-gray-600"
+                  }`}
+                >
+                  Yes, I have one
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, hasFob: "no", fobNumber: "" })}
+                  className={`flex-1 h-10 rounded-md border text-sm font-medium transition-colors ${
+                    formData.hasFob === "no"
+                      ? "border-blue-600 bg-blue-50 text-blue-700"
+                      : "border-input bg-background text-gray-600"
+                  }`}
+                >
+                  No fob
+                </button>
+              </div>
+              {formData.hasFob === "yes" && (
+                <div className="pt-1">
+                  <Input
+                    placeholder="e.g. 292"
+                    maxLength={3}
+                    value={formData.fobNumber}
+                    onChange={(e) => setFormData({ ...formData, fobNumber: e.target.value.replace(/\D/g, "") })}
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter just the <strong>last 3 digits</strong> of your fob number.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

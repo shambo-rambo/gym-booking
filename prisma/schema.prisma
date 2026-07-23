@@ -20,10 +20,23 @@ model User {
   status                 Status   @default(PENDING)
   notificationPreference NotificationPreference @default(EMAIL_ONLY)
   residencyType          ResidencyType?
-  fobNumber              String?
   assistantMessagesToday Int      @default(0)
   assistantUsageDate     DateTime?
   mustChangePassword     Boolean  @default(false)
+  // Opt-in, off by default: upgrades the 2-hour-before booking reminder into an
+  // interactive "still coming?" push/email with Yes/No actions instead of a plain notice.
+  confirmBookingChecks   Boolean  @default(false)
+
+  // Mandatory for MANAGER, optional opt-in for RESIDENT. See lib/twoFactor.ts.
+  twoFactorEnabled        Boolean   @default(false)
+  twoFactorSecret         String?   // AES-256-GCM encrypted (iv:tag:ciphertext, base64)
+  twoFactorEnabledAt      DateTime?
+  // Stamped by a successful verify-login/check-trusted-device/enable; the jwt callback
+  // trusts this (compared against token.iat) instead of any client-supplied flag.
+  twoFactorVerifiedAt     DateTime?
+  twoFactorFailedAttempts Int       @default(0)
+  twoFactorLockedUntil    DateTime?
+
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -35,6 +48,8 @@ model User {
   noticeRecipients       NoticeRecipient[]
   notificationSettings   NotificationSetting[]
   pushSubscriptions      PushSubscription[]
+  backupCodes            BackupCode[]
+  trustedDevices         TrustedDevice[]
 
   @@index([apartmentNumber])
   @@index([status])
@@ -211,6 +226,38 @@ model PasswordResetToken {
   @@index([userId])
 }
 
+// Single-use 2FA recovery codes. codeHash is a deterministic HMAC (not bcrypt) so
+// verify-login can do one indexed lookup instead of looping a slow hash compare —
+// codes are already high-entropy random, so slow hashing buys nothing here.
+model BackupCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// "Trust this device for 30 days" — skips the 2FA prompt on a specific browser.
+// tokenHash is SHA-256 of the raw token stored in an httpOnly cookie (only the hash
+// is ever persisted). expiresAt is fixed at creation and never extended.
+model TrustedDevice {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String    @unique
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 model NotificationLog {
   id        String   @id @default(cuid())
   userId    String?
@@ -230,6 +277,7 @@ model NotificationLog {
 enum NotificationType {
   BOOKING_CONFIRMATION
   BOOKING_REMINDER
+  BOOKING_CONFIRM_CHECK
   QUEUE_SLOT_AVAILABLE
   QUEUE_POSITION_UPDATE
   ACCOUNT_VERIFIED
@@ -250,6 +298,19 @@ enum NotificationCategory {
   URGENT
   GENERAL
   MOVE
+}
+
+// Fobs belong to the apartment, not any one resident — a unit may have several
+// (one per resident, spares, etc). fobNumber is the last 3 digits of the physical
+// fob, which is what's visible/loggable for matching against building access records.
+model Fob {
+  id              String   @id @default(cuid())
+  apartmentNumber Int
+  fobNumber       String
+  createdAt       DateTime @default(now())
+
+  @@unique([apartmentNumber, fobNumber])
+  @@index([apartmentNumber])
 }
 
 model NotificationSetting {

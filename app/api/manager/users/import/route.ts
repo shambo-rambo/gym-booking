@@ -18,7 +18,9 @@ const rowSchema = z.object({
   residencyType: z.enum(["TENANT", "OWNER_OCCUPIER", "NON_RESIDENT_OWNER"], {
     error: "residencyType must be TENANT, OWNER_OCCUPIER, or NON_RESIDENT_OWNER",
   }),
-  fobNumber: z.string().optional().nullable(),
+  // Fobs belong to the apartment, not this specific resident — last 3 digits of the
+  // physical fob. Optional here since a manager may add it to the unit's fob list later.
+  fobNumber: z.string().regex(/^\d{3}$/, "Fob number must be the last 3 digits").optional().nullable(),
 })
 
 const importSchema = z.object({
@@ -84,12 +86,19 @@ export async function POST(request: NextRequest) {
           apartmentNumber: row.apartmentNumber,
           phoneNumber: row.mobile || null,
           residencyType: row.residencyType,
-          fobNumber: row.fobNumber || null,
           notificationPreference: "EMAIL_ONLY",
           status: "VERIFIED",
           role: "RESIDENT",
         },
       })
+
+      if (row.fobNumber) {
+        await prisma.fob.upsert({
+          where: { apartmentNumber_fobNumber: { apartmentNumber: row.apartmentNumber, fobNumber: row.fobNumber } },
+          create: { apartmentNumber: row.apartmentNumber, fobNumber: row.fobNumber },
+          update: {},
+        })
+      }
 
       if (resend) {
         await resend.emails

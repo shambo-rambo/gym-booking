@@ -15,14 +15,17 @@ export async function GET() {
   }
   const userId = (session.user as any).id
 
-  const settings = await Promise.all(
-    CATEGORIES.map(async (category) => ({
-      category,
-      ...(await getEffectiveSetting(userId, category)),
-    }))
-  )
+  const [settings, user] = await Promise.all([
+    Promise.all(
+      CATEGORIES.map(async (category) => ({
+        category,
+        ...(await getEffectiveSetting(userId, category)),
+      }))
+    ),
+    prisma.user.findUnique({ where: { id: userId }, select: { confirmBookingChecks: true } }),
+  ])
 
-  return NextResponse.json({ settings })
+  return NextResponse.json({ settings, confirmBookingChecks: user?.confirmBookingChecks ?? false })
 }
 
 const patchSchema = z.object({
@@ -36,6 +39,7 @@ const patchSchema = z.object({
       })
     )
     .min(1),
+  confirmBookingChecks: z.boolean().optional(),
 })
 
 export async function PATCH(request: NextRequest) {
@@ -46,12 +50,12 @@ export async function PATCH(request: NextRequest) {
   const userId = (session.user as any).id
 
   try {
-    const { settings } = patchSchema.parse(await request.json())
+    const { settings, confirmBookingChecks } = patchSchema.parse(await request.json())
 
     for (const setting of settings) {
       if (setting.category === "URGENT" && (!setting.email || !setting.sms)) {
         return NextResponse.json(
-          { error: "Urgent alerts must always be sent by text and email." },
+          { error: "Urgent alerts must always be sent by SMS and email." },
           { status: 400 }
         )
       }
@@ -62,21 +66,24 @@ export async function PATCH(request: NextRequest) {
       const user = await prisma.user.findUnique({ where: { id: userId }, select: { phoneNumber: true } })
       if (!user?.phoneNumber) {
         return NextResponse.json(
-          { error: "Add a phone number in your profile before enabling text notifications." },
+          { error: "Add a phone number in your profile before enabling SMS notifications." },
           { status: 400 }
         )
       }
     }
 
-    await Promise.all(
-      settings.map((setting) =>
+    await Promise.all([
+      ...settings.map((setting) =>
         prisma.notificationSetting.upsert({
           where: { userId_category: { userId, category: setting.category } },
           create: { userId, category: setting.category, email: setting.email, sms: setting.sms, push: setting.push },
           update: { email: setting.email, sms: setting.sms, push: setting.push },
         })
-      )
-    )
+      ),
+      ...(confirmBookingChecks !== undefined
+        ? [prisma.user.update({ where: { id: userId }, data: { confirmBookingChecks } })]
+        : []),
+    ])
 
     return NextResponse.json({ success: true })
   } catch (error) {

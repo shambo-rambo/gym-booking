@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
-import { generateTimeSlots, parseSlotDateTime, EXCLUSIVE_TYPES } from "@/lib/booking-rules"
+import { generateTimeSlots, parseSlotDateTime, EXCLUSIVE_TYPES, LAST_MINUTE_BYPASS_MINUTES } from "@/lib/booking-rules"
 import { parseLocalDate } from "@/lib/date-utils"
 
 export const dynamic = 'force-dynamic'
@@ -169,16 +169,18 @@ export async function GET(request: NextRequest) {
           (b) => EXCLUSIVE_TYPES.includes(b.bookingType)
         )
 
-        // Shared anti-hoarding: applies to all slot types for this user.
-        // Bypassed for slots starting within 3 hours — the booking creation route
-        // skips limit checks for those slots, so the UI must show them as bookable.
+        // Anti-hoarding checks. The session-count and consecutive-day rules are bypassed
+        // for slots starting within the last-minute window (matches the booking creation
+        // route). The daily 1-hour limit is never bypassed — otherwise a resident could
+        // stack extra time onto an already-maxed-out day as the clock ticks down.
         const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - now.getTime()) / (1000 * 60)
         const antiHoardingBlocked =
-          !userBooking &&
-          minutesUntilSlot > 180 && (
-            isConsecutiveDayConflict(startTime) ||
+          !userBooking && (
             exceedsDailyLimit(startTime, duration) ||
-            exceedsSessionLimit(startTime)
+            (minutesUntilSlot > LAST_MINUTE_BYPASS_MINUTES && (
+              isConsecutiveDayConflict(startTime) ||
+              exceedsSessionLimit(startTime)
+            ))
           )
 
         let exclusiveStatus = "available"
@@ -240,10 +242,11 @@ export async function GET(request: NextRequest) {
           (b) => b.startTime === startTime && b.duration === duration
         )
 
-        // Within 3 hours and slot is genuinely available: suppress the queue entry so the
-        // UI shows booking buttons instead of "You are in the queue". The last-minute bypass
-        // in the create route will accept the booking; queue entry is cleaned up on book.
-        const lastMinuteBypass = minutesUntilSlot <= 180 && exclusiveStatus === 'available'
+        // Within the last-minute bypass window and slot is genuinely available: suppress
+        // the queue entry so the UI shows booking buttons instead of "You are in the
+        // queue". The last-minute bypass in the create route will accept the booking;
+        // queue entry is cleaned up on book.
+        const lastMinuteBypass = minutesUntilSlot <= LAST_MINUTE_BYPASS_MINUTES && exclusiveStatus === 'available'
 
         return {
           duration,

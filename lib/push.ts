@@ -28,13 +28,28 @@ interface PushSourceData {
   body?: string
   manageUrl?: string
   claimUrl?: string
+  bookingId?: string
 }
 
 function resolveUrl(type: NotificationType, data: PushSourceData): string {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   if (type === 'QUEUE_SLOT_AVAILABLE') return data.claimUrl || `${appUrl}/queue`
   if (type === 'BUILDING_MESSAGE') return appUrl
+  if (type === 'BOOKING_CONFIRM_CHECK' && data.bookingId) return `${appUrl}/booking-check/${data.bookingId}`
   return data.manageUrl || `${appUrl}/my-bookings`
+}
+
+// Real OS-level action buttons — only Chrome/Android/desktop render these; Safari/iOS
+// falls back to a plain tap that opens `url` (resolveUrl above), which is why that URL
+// always points at a page offering the same Keep/Cancel choice.
+function resolveActions(type: NotificationType): { action: string; title: string }[] | undefined {
+  if (type === 'BOOKING_CONFIRM_CHECK') {
+    return [
+      { action: 'keep', title: '✅ Yes, keep it' },
+      { action: 'cancel', title: '❌ No, cancel it' },
+    ]
+  }
+  return undefined
 }
 
 export async function sendPush(
@@ -54,6 +69,7 @@ export async function sendPush(
   const title = data.title || content.subject
   const body = data.body || content.smsBody
   const url = resolveUrl(type, data)
+  const actions = resolveActions(type)
   const payload = JSON.stringify({
     title,
     body,
@@ -61,6 +77,8 @@ export async function sendPush(
     tag: type,
     icon: '/api/icons/192',
     badge: '/api/icons/192',
+    actions,
+    bookingId: data.bookingId,
   })
 
   await Promise.all(

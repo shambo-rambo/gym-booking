@@ -78,7 +78,7 @@ export default function BookPage() {
           <>
             <BookingCalendar
               facilityType={facilityType}
-              defaultBookingType={amenity === "sauna" ? BookingType.EXCLUSIVE : BookingType.SHARED}
+              defaultBookingType={BookingType.EXCLUSIVE}
             />
           </>
         )}

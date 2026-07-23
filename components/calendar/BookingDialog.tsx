@@ -13,11 +13,12 @@ import {
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Check } from "lucide-react"
+import { Check, Flame } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { SlotAvailability } from "@/lib/types"
 import { EQUIPMENT_LABELS, EQUIPMENT_LIST } from "@/lib/equipment"
 import { loadBookingPrefs, saveBookingPrefs } from "@/lib/bookingPrefs"
+import { isPeakTime } from "@/lib/peak-time"
 
 interface BookingPayload {
   facilityType: FacilityType
@@ -36,6 +37,7 @@ interface BookingDialogProps {
   startTime: string
   availability: SlotAvailability
   defaultBookingType?: BookingType
+  defaultDuration?: 30 | 60
   defaultEquipment?: EquipmentType[]
   onBookingSuccess?: () => void
 }
@@ -48,10 +50,11 @@ export function BookingDialog({
   startTime,
   availability,
   defaultBookingType = BookingType.SHARED,
+  defaultDuration = 60,
   defaultEquipment = [],
   onBookingSuccess,
 }: BookingDialogProps) {
-  const [selectedDuration, setSelectedDuration] = useState<30 | 60>(30)
+  const [selectedDuration, setSelectedDuration] = useState<30 | 60>(defaultDuration)
   const [selectedBookingType, setSelectedBookingType] = useState<BookingType>(defaultBookingType)
   const [selectedEquipment, setSelectedEquipment] = useState<EquipmentType[]>(defaultEquipment)
   const [loading, setLoading] = useState(false)
@@ -65,11 +68,16 @@ export function BookingDialog({
     if (open) {
       if (facilityType === FacilityType.GYM) {
         const prefs = loadBookingPrefs()
+        // A saved 60-min preference is structurally invalid on a half-hour start time
+        // (60-min sessions must start on the hour) — ignore it rather than opening the
+        // dialog pinned to a duration the slot can't actually offer.
+        const prefDuration = prefs?.duration === 60 && !startTime.endsWith(":00") ? undefined : prefs?.duration
         setSelectedBookingType(prefs?.bookingType ?? defaultBookingType)
-        setSelectedDuration(prefs?.duration ?? 30)
+        setSelectedDuration(prefDuration ?? defaultDuration)
         setSelectedEquipment(prefs?.equipment ?? defaultEquipment)
       } else {
         setSelectedBookingType(defaultBookingType)
+        setSelectedDuration(defaultDuration)
         setSelectedEquipment(defaultEquipment)
       }
       setError("")
@@ -407,18 +415,22 @@ export function BookingDialog({
               <div className="space-y-2">
                 <Label className="text-sm font-medium">Duration</Label>
                 <div className="flex gap-3">
-                  {([30, 60] as const).map((d) => (
-                    <Button
-                      key={d}
-                      type="button"
-                      size="lg"
-                      variant={selectedDuration === d ? "default" : "outline"}
-                      onClick={() => setSelectedDuration(d)}
-                      className="flex-1 min-h-[48px] text-base"
-                    >
-                      {d} minutes
-                    </Button>
-                  ))}
+                  {([30, 60] as const).map((d) => {
+                    const disabled = d === 60 && !startTime.endsWith(":00")
+                    return (
+                      <Button
+                        key={d}
+                        type="button"
+                        size="lg"
+                        variant={selectedDuration === d ? "default" : "outline"}
+                        disabled={disabled}
+                        onClick={() => setSelectedDuration(d)}
+                        className="flex-1 min-h-[48px] text-base disabled:opacity-40"
+                      >
+                        {d} minutes
+                      </Button>
+                    )
+                  })}
                 </div>
               </div>
 
@@ -460,9 +472,20 @@ export function BookingDialog({
                     Exclusive
                   </button>
                 </div>
+                {selectedBookingType === BookingType.EXCLUSIVE && (
+                  <p className="text-xs text-gray-500">
+                    Books the whole {facilityType === FacilityType.GYM ? "Gym" : "Sauna"} just for you — other residents can still book the {facilityType === FacilityType.GYM ? "Sauna" : "Gym"} during your booking.
+                  </p>
+                )}
                 {selectedBookingType === BookingType.EXCLUSIVE_BOTH && (
                   <p className="text-xs text-gray-500">
                     Books the whole {facilityType === FacilityType.GYM ? "Gym and the Sauna" : "Sauna and the Gym"} together — no one else can use either during this time.
+                  </p>
+                )}
+                {isPeakTime(startTime) && (selectedBookingType !== BookingType.SHARED || selectedDuration === 60) && (
+                  <p className="flex items-start gap-1.5 text-xs text-orange-700 bg-orange-50 border border-orange-200 rounded-md px-3 py-2">
+                    <Flame className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                    <span>It's peak time (3–9pm) — a Shared, 30-minute session helps more residents get a turn.</span>
                   </p>
                 )}
               </div>
@@ -479,8 +502,9 @@ export function BookingDialog({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {EQUIPMENT_LIST.map(([value, label]) => {
                       const status = slot?.shared?.[value]
-                      const sharedInUse = status === "booked"
-                      const taken = status === "blocked" || status === "full"
+                      // "booked" means someone else already has this equipment for this
+                      // slot — it's not physically shareable, so treat it like "taken".
+                      const taken = status === "blocked" || status === "full" || status === "booked"
                       const active = selectedEquipment.includes(value)
                       const atLimit = selectedEquipment.length >= MAX_EQUIPMENT && !active
                       return (
@@ -490,13 +514,9 @@ export function BookingDialog({
                           variant={active ? "default" : "outline"}
                           onClick={() => !taken && toggleEquipment(value)}
                           disabled={taken || atLimit}
-                          className={cn(
-                            "h-12 text-sm justify-start",
-                            sharedInUse && !active && "border-yellow-400 bg-yellow-50 hover:bg-yellow-100 text-yellow-900"
-                          )}
+                          className="h-12 text-sm justify-start"
                         >
                           {label}
-                          {sharedInUse && !active && <span className="ml-auto text-xs text-yellow-700 font-semibold">Share</span>}
                           {taken && <span className="ml-auto text-xs opacity-60">Taken</span>}
                         </Button>
                       )

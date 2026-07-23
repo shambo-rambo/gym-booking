@@ -1,3 +1,5 @@
+import { LAST_MINUTE_BYPASS_MINUTES, QUEUE_CLAIM_WINDOW_MINUTES } from "@/lib/booking-constants"
+
 export const RESIDENT_KNOWLEDGE = `
 THE WATERTOWER APP — RESIDENT FEATURES
 
@@ -13,11 +15,11 @@ Your personal limits (Gym and Sauna only, tracked separately per facility):
 - Max 3 upcoming sessions per facility.
 - Max 1 hour of booked time per facility per day.
 - You can't book the same start time on two consecutive days.
-- These limits are waived entirely within 3 hours of the session start — you can always book last-minute.
+- The session-count and consecutive-day limits are waived within ${LAST_MINUTE_BYPASS_MINUTES} minutes of the session start — you can book last-minute even if you'd normally be blocked. The 1-hour-per-day limit is never waived, so it can't be used to stack extra time onto an already-maxed-out day.
 
 Cancelling: from My Bookings, cancel any time up to 30 minutes before the session starts. When you cancel, the first person in the queue for that slot is notified automatically.
 
-Queue / waitlist: join when a slot is full or you've hit a personal limit (and it's more than 3 hours away). When a slot opens up, the first person in queue gets an email with a 30-minute window to claim it before it passes to the next person. Inside 3 hours, the 30-minute claim window and personal limits are both waived.
+Queue / waitlist: join when a slot is full or you've hit a personal limit (and it's more than ${LAST_MINUTE_BYPASS_MINUTES} minutes away). When a slot opens up, the first person in queue gets an email with a ${QUEUE_CLAIM_WINDOW_MINUTES}-minute window to claim it before it passes to the next person. Inside ${LAST_MINUTE_BYPASS_MINUTES} minutes, the claim window, session-count, and consecutive-day limits are waived — but the 1-hour-per-day limit still applies.
 
 My Bookings (page: /my-bookings, "My Bookings"): see all your upcoming bookings and queue entries, and cancel from here.
 
@@ -37,10 +39,10 @@ THE WATERTOWER APP — ADMIN (MANAGER) FEATURES
 
 Managers reach the admin area by switching the top-right pill from "Resident" to "Admin" — this just changes which navigation is shown, it doesn't require re-logging in. The Manager Dashboard (page: /manager) has four main areas:
 
-Send a message (page: /manager/messages, "Messages"): a 4-step wizard — pick a category (Amenity, Maintenance, Urgent, General), choose the audience (everyone, tenants, owners, owner-occupiers, a specific floor, or specific apartments), write the message, then review and send. Urgent messages text every resident with a phone number on file, even those set to email-only — the other categories respect each resident's own notification preference.
+Send a message (page: /manager/messages, "Messages"): a 4-step wizard — pick a category (Amenity, Maintenance, Urgent, General), choose the audience (everyone, residents, owners, owner-occupiers, a specific floor, or specific apartments), write the message, then review and send. Urgent messages are sent by SMS to every resident with a phone number on file, even those set to email-only — the other categories respect each resident's own notification preference.
 
 Residents (page: /manager/users, "Residents"): approve/verify newly registered residents, edit resident details (including their notification method and phone number), and bulk-import residents via a CSV paste. Also links to the Registration QR code page (/manager/qr-code) — a printable/displayable QR code new residents can scan to self-register.
-- Removing a resident: there's no hard delete — deactivate their account from this page instead. Deactivated accounts move to a separate "Deactivated" tab, lose access to the app, and free up their apartment's resident slot. Use this for tenants who've moved out.
+- Removing a resident: there's no hard delete — deactivate their account from this page instead. Deactivated accounts move to a separate "Deactivated" tab, lose access to the app, and free up their apartment's resident slot. Use this for residents who've moved out.
 - Reactivating: if a deactivated resident moves back in, or an account was deactivated by mistake, open the Deactivated tab and tap Reactivate on their account — this restores their access with their existing login (nothing else needs to be redone).
 
 Manage bookings (page: /manager/bookings, "All Bookings"): see every booking across the building, filterable by facility and date, and cancel any resident's booking on their behalf.

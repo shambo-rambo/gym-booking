@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { z } from "zod"
-import { isSlotAvailable, checkConsecutiveDays, checkDailyLimit, checkSessionLimit, parseSlotDateTime } from "@/lib/booking-rules"
+import { isSlotAvailable, checkConsecutiveDays, checkDailyLimit, checkSessionLimit, parseSlotDateTime, validateBookingTime, LAST_MINUTE_BYPASS_MINUTES } from "@/lib/booking-rules"
 import { parseLocalDate } from "@/lib/date-utils"
 
 export const dynamic = 'force-dynamic'
@@ -63,12 +63,12 @@ export async function POST(request: NextRequest) {
     const date = parseLocalDate(dateStr)
     const isLibrary = facilityType === "LIBRARY"
 
-    // Duration must be 30 or 60 for gym/sauna; library allows any positive duration
-    if (!isLibrary && duration !== 30 && duration !== 60) {
-      return NextResponse.json(
-        { error: "Duration must be 30 or 60 minutes." },
-        { status: 400 }
-      )
+    // Duration/time-of-day rules must be 30 or 60 for gym/sauna; library allows any positive duration
+    if (!isLibrary) {
+      const timeValidation = validateBookingTime(date, startTime, duration)
+      if (!timeValidation.allowed) {
+        return NextResponse.json({ error: timeValidation.reason }, { status: 400 })
+      }
     }
 
     // Validate equipment type for shared gym
@@ -97,6 +97,8 @@ export async function POST(request: NextRequest) {
     )
 
     let canUserBook = true
+    const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - Date.now()) / (1000 * 60)
+    const isLastMinute = minutesUntilSlot <= LAST_MINUTE_BYPASS_MINUTES
 
     if (isLibrary) {
       // Library has no booking limits — if the slot is free, book directly
@@ -107,25 +109,28 @@ export async function POST(request: NextRequest) {
         )
       }
     } else {
-      // Check booking rules for gym/sauna
-      const [sessionCheck, dailyCheck, consecutiveCheck] = await Promise.all([
-        checkSessionLimit(userId, facilityType as FacilityType),
-        checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration),
-        checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime),
-      ])
-      const antiHoardingCheck = sessionCheck.allowed && dailyCheck.allowed && consecutiveCheck.allowed
-        ? { allowed: true }
-        : { allowed: false, reason: sessionCheck.reason ?? dailyCheck.reason ?? consecutiveCheck.reason }
+      // Check booking rules for gym/sauna. The daily 1-hour limit is never bypassed, even
+      // last-minute — otherwise a resident could stack extra time onto an already-maxed-out
+      // day as the clock ticks down. Session-count and consecutive-day are bypassed last-minute.
+      const dailyCheck = await checkDailyLimit(userId, facilityType as FacilityType, date, startTime, duration)
+      let antiHoardingCheck = dailyCheck
+      if (dailyCheck.allowed && !isLastMinute) {
+        const [sessionCheck, consecutiveCheck] = await Promise.all([
+          checkSessionLimit(userId, facilityType as FacilityType),
+          checkConsecutiveDays(userId, facilityType as FacilityType, date, startTime),
+        ])
+        antiHoardingCheck = sessionCheck.allowed && consecutiveCheck.allowed
+          ? { allowed: true }
+          : { allowed: false, reason: sessionCheck.reason ?? consecutiveCheck.reason }
+      }
       canUserBook = antiHoardingCheck.allowed
 
-      const minutesUntilSlot = (parseSlotDateTime(date, startTime).getTime() - Date.now()) / (1000 * 60)
-      const isLastMinute = minutesUntilSlot <= 180
-
-      // Within 3 hours: anti-hoarding is bypassed, so if the slot is physically available
-      // the user should book directly rather than queue
-      if (isLastMinute && slotAvailability.allowed) {
+      // Last-minute window: session/consecutive-day limits are bypassed, so if the slot is
+      // physically available and the daily limit doesn't block it, the user should book
+      // directly rather than queue
+      if (isLastMinute && slotAvailability.allowed && antiHoardingCheck.allowed) {
         return NextResponse.json(
-          { error: "This slot is available to book directly — booking limits don't apply within 3 hours of the session." },
+          { error: `This slot is available to book directly — booking limits don't apply within ${LAST_MINUTE_BYPASS_MINUTES} minutes of the session.` },
           { status: 400 }
         )
       }
@@ -204,10 +209,16 @@ export async function POST(request: NextRequest) {
 
       if (!isLibrary) {
         for (const entry of allQueueEntries) {
-          const entrySession = await checkSessionLimit(entry.userId, facilityType as FacilityType)
           const entryDaily = await checkDailyLimit(entry.userId, facilityType as FacilityType, date, startTime, duration)
-          const entryConsecutive = await checkConsecutiveDays(entry.userId, facilityType as FacilityType, date, startTime)
-          if (entrySession.allowed && entryDaily.allowed && entryConsecutive.allowed) {
+          let entryCanBook = entryDaily.allowed
+          if (entryCanBook && !isLastMinute) {
+            const [entrySession, entryConsecutive] = await Promise.all([
+              checkSessionLimit(entry.userId, facilityType as FacilityType),
+              checkConsecutiveDays(entry.userId, facilityType as FacilityType, date, startTime),
+            ])
+            entryCanBook = entrySession.allowed && entryConsecutive.allowed
+          }
+          if (entryCanBook) {
             lastCanBookPosition = entry.position
           }
         }

@@ -153,7 +153,7 @@ export default function MessagesPage() {
     if (n.targetType === "ALL") return "Everyone"
     if (n.targetType === "RESIDENCY") {
       const values = new Set(n.targetValues)
-      if (values.size === 1 && values.has("TENANT")) return "Tenants"
+      if (values.size === 1 && values.has("TENANT")) return "Residents"
       if (values.size === 1 && values.has("OWNER_OCCUPIER")) return "Owner-occupiers"
       return "Owners"
     }
@@ -394,7 +394,7 @@ export default function MessagesPage() {
             <RadioGroup value={targetMode} onValueChange={(v) => setTargetMode(v as TargetMode)} className="gap-3">
               {[
                 { value: "ALL", label: "Everyone" },
-                { value: "TENANT", label: "Tenants" },
+                { value: "TENANT", label: "Residents" },
                 { value: "OWNERS", label: "Owners" },
                 { value: "OWNER_OCCUPIER", label: "Owner-occupiers" },
                 { value: "FLOOR", label: "By floor" },
@@ -537,7 +537,7 @@ export default function MessagesPage() {
                             <Checkbox className="w-4 h-4 shrink-0" checked={included} onCheckedChange={() => toggleRecipient(r.id)} />
                             <span className="flex-1">{r.name} <span className="text-on-surface-variant">· Apt {r.apartmentNumber}</span></span>
                             <span className="text-xs text-on-surface-variant text-right shrink-0">
-                              {!included ? "Removed" : getsSms ? "Text" : "Email"}
+                              {!included ? "Removed" : getsSms ? "SMS" : "Email"}
                             </span>
                           </label>
                         )
@@ -556,12 +556,12 @@ export default function MessagesPage() {
 
                   <div className="flex items-center justify-between py-2 border-t border-outline-variant/20">
                     <div>
-                      <p className="font-semibold">Also send as text</p>
+                      <p className="font-semibold">Also send as SMS</p>
                       <p className="text-xs text-on-surface-variant">
                         {preview.smsForced
                           ? `Urgent overrides preference — ${includedSmsEligible} of ${includedTotal} residents have a mobile on file`
-                          : `${includedSmsEligible} of ${includedTotal} residents opted into texts`
-                        } · est. ${(includedSmsEligible * SMS_COST_ESTIMATE).toFixed(2)}. They get a text instead of an email, not both.
+                          : `${includedSmsEligible} of ${includedTotal} residents opted into SMS`
+                        } · est. ${(includedSmsEligible * SMS_COST_ESTIMATE).toFixed(2)}. They get an SMS instead of an email, not both.
                       </p>
                     </div>
                     <Switch checked={smsOn} onCheckedChange={setSmsOn} />

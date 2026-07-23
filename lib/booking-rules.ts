@@ -1,6 +1,7 @@
 import { prisma } from "./prisma"
 import { FacilityType, BookingType, EquipmentType } from "@prisma/client"
 import { startOfWeek, endOfWeek } from "date-fns"
+import { isPeakTime } from "./peak-time"
 
 export { LAST_MINUTE_BYPASS_MINUTES, QUEUE_CLAIM_WINDOW_MINUTES } from "./booking-constants"
 
@@ -193,7 +194,8 @@ export async function isSlotAvailable(
 export function validateBookingTime(
   date: Date,
   startTime: string,
-  duration: number
+  duration: number,
+  facilityType?: FacilityType
 ): ValidationResult {
   const now = new Date()
   const [hours, minutes] = startTime.split(':').map(Number)
@@ -232,6 +234,13 @@ export function validateBookingTime(
 
   if (duration === 60 && minutes !== 0) {
     return { allowed: false, reason: "60-minute sessions must start on the hour." }
+  }
+
+  // Outside peak hours, the gym only offers hourly slots — fewer, less fragmented
+  // choices when demand is low. During peak (3-9pm) the full 30-min grid remains so
+  // more residents can get a turn.
+  if (facilityType === FacilityType.GYM && minutes !== 0 && !isPeakTime(startTime)) {
+    return { allowed: false, reason: "Outside peak hours (3–9pm), gym sessions must start on the hour." }
   }
 
   return { allowed: true }

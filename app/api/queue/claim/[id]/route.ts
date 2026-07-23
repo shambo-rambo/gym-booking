@@ -77,7 +77,8 @@ export async function POST(
     const timeValidation = validateBookingTime(
       queueEntry.date,
       queueEntry.startTime,
-      queueEntry.duration
+      queueEntry.duration,
+      queueEntry.facilityType
     )
 
     if (!timeValidation.allowed) {

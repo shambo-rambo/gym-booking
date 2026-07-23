@@ -209,12 +209,17 @@ export function BookingCalendar({
         const [h] = time.split(":").map(Number)
         if ((h + 1) * 60 <= nowMinutes) return false
       }
+      // Off-peak, the gym only offers hourly slots (see validateBookingTime) — the
+      // half-hour slot has nothing bookable in it, so hide it rather than showing an
+      // always-disabled cell. Sauna is unaffected; it keeps the full 30-min grid.
+      if (facilityType === FacilityType.GYM && !time.endsWith(":00") && !isPeakTime(time)) return false
+
       if (timeFilter === "morning")   return time >= "06:00" && time <= "11:30"
       if (timeFilter === "afternoon") return time >= "12:00" && time <= "16:30"
       if (timeFilter === "evening")   return time >= "17:00" && time <= "22:30"
       return true
     })
-  }, [selectedDate, today, timeFilter])
+  }, [selectedDate, today, timeFilter, facilityType])
 
   const dayData = availabilityData[format(selectedDate, "yyyy-MM-dd")]
 
@@ -324,6 +329,7 @@ export function BookingCalendar({
             <h3 className="text-xl font-bold tracking-tight text-primary">Select a Time</h3>
             <p className="text-sm text-on-surface-variant">
               30 or 60 minute sessions &middot; <span className="text-orange-600 font-medium">peak hours (3&ndash;9pm)</span>
+              {facilityType === FacilityType.GYM && " · hourly slots only outside peak"}
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">

@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     // Duration/time-of-day rules must be 30 or 60 for gym/sauna; library allows any positive duration
     if (!isLibrary) {
-      const timeValidation = validateBookingTime(date, startTime, duration)
+      const timeValidation = validateBookingTime(date, startTime, duration, facilityType as FacilityType)
       if (!timeValidation.allowed) {
         return NextResponse.json({ error: timeValidation.reason }, { status: 400 })
       }

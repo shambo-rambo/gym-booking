@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation"
 import Navbar from "@/components/Navbar"
 import { Badge } from "@/components/ui/badge"
 import { format, formatDistanceToNow, differenceInCalendarDays } from "date-fns"
-import { AlertTriangle, Bell, Truck } from "lucide-react"
+import { AlertTriangle, Bell, ChevronDown, Truck } from "lucide-react"
 
 interface Notice {
   id: string
@@ -37,6 +37,7 @@ export default function HomePage() {
   const [notices, setNotices] = useState<Notice[]>([])
   const [loading, setLoading] = useState(true)
   const [openId, setOpenId] = useState<string | null>(null)
+  const [pastOpen, setPastOpen] = useState(false)
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login")
@@ -131,13 +132,72 @@ export default function HomePage() {
     )
   }
 
-  const NoticeSection = ({ label, items }: { label: string; items: Notice[] }) =>
-    items.length === 0 ? null : (
-      <div className="space-y-3">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-on-surface-variant/70 mt-2">{label}</h2>
-        {items.map((n) => <NoticeCard key={n.id} notice={n} />)}
+  const NoticeSection = ({
+    label,
+    items,
+    collapsible,
+    open,
+    onToggle,
+  }: {
+    label: string
+    items: Notice[]
+    collapsible?: boolean
+    open?: boolean
+    onToggle?: () => void
+  }) => {
+    if (items.length === 0) return null
+
+    if (!collapsible) {
+      return (
+        <div className="space-y-3">
+          <h2 className="text-xs font-bold uppercase tracking-wide text-on-surface-variant/70 mt-2">{label}</h2>
+          {items.map((n) => <NoticeCard key={n.id} notice={n} />)}
+        </div>
+      )
+    }
+
+    return (
+      <div className="mt-2">
+        <button
+          onClick={onToggle}
+          className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-all active:scale-[0.98] ${
+            open
+              ? "bg-primary/5 border-primary/20"
+              : "bg-white border-outline-variant/20 shadow-sm"
+          }`}
+        >
+          <span className="text-sm font-bold text-primary">{label}</span>
+          <span
+            className={`text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center leading-none ${
+              open ? "bg-primary text-on-primary" : "bg-secondary/15 text-secondary"
+            }`}
+          >
+            {items.length}
+          </span>
+          <span
+            className={`ml-auto w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+              open ? "bg-primary/10" : "bg-surface-container-low"
+            }`}
+          >
+            <ChevronDown
+              className={`w-4 h-4 text-primary transition-transform duration-300 ${open ? "rotate-180" : ""}`}
+            />
+          </span>
+        </button>
+        <div
+          className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+            open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+          }`}
+        >
+          <div className="overflow-hidden">
+            <div className="space-y-3 pt-3">
+              {items.map((n) => <NoticeCard key={n.id} notice={n} />)}
+            </div>
+          </div>
+        </div>
       </div>
     )
+  }
 
   return (
     <div className="min-h-screen bg-surface">
@@ -160,7 +220,13 @@ export default function HomePage() {
           <div className="space-y-6">
             <NoticeSection label="Today" items={today} />
             <NoticeSection label="Upcoming" items={upcoming} />
-            <NoticeSection label="Past" items={past} />
+            <NoticeSection
+              label="Past"
+              items={past}
+              collapsible
+              open={pastOpen}
+              onToggle={() => setPastOpen((o) => !o)}
+            />
           </div>
         )}
       </main>

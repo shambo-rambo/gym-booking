@@ -44,6 +44,7 @@ export function BookingRules() {
           <Rule>Book up to <strong>7 days in advance</strong></Rule>
           <Rule>Sessions are <strong>30 or 60 minutes</strong> — 60-minute sessions must start <strong>on the hour</strong></Rule>
           <Rule><strong className="text-orange-600">Peak hours (3:00 – 9:00 PM)</strong> are highlighted in orange on the calendar — a Shared, 30-minute session is suggested so more residents get a turn, but it's not required</Rule>
+          <Rule>Outside peak hours, <strong>gym sessions can only start on the hour</strong> — the sauna keeps 30-minute slots all day</Rule>
           <Rule>The current hour's slot stays bookable <strong>for the whole hour</strong> — e.g. the 3:00 slot can still be booked at 3:45 if no one's taken it</Rule>
         </ul>
       </Section>

@@ -48,7 +48,9 @@ async function createExclusiveBothBooking(
   startTime: string,
   duration: number
 ) {
-  const timeValidation = validateBookingTime(date, startTime, duration)
+  // Always includes the gym (see `facilities` below), so the gym's off-peak
+  // hourly-only rule applies regardless of which facility the user opened this from.
+  const timeValidation = validateBookingTime(date, startTime, duration, FacilityType.GYM)
   if (!timeValidation.allowed) {
     return NextResponse.json({ error: timeValidation.reason }, { status: 400 })
   }
@@ -333,7 +335,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validation 2: Check booking time constraints
-    const timeValidation = validateBookingTime(date, startTime, duration)
+    const timeValidation = validateBookingTime(date, startTime, duration, facilityType as FacilityType)
     if (!timeValidation.allowed) {
       return NextResponse.json(
         { error: timeValidation.reason },
